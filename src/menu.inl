@@ -375,11 +375,14 @@ static DWORD WINAPI UpdateThread(LPVOID) {
             WinHttpQueryHeaders(r, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &code, &sz, WINHTTP_NO_HEADER_INDEX);
             char body[64] = {}; DWORD got = 0;
             if (code == 200 && WinHttpReadData(r, body, sizeof body - 1, &got)) {
-                int maj = 0, min = 0;
+                int maj = 0, min = 0, pat = 0;
                 const char* b = body; while (*b == 'v' || *b == 'V' || *b == ' ') b++;
-                if (sscanf(b, "%d.%d", &maj, &min) >= 1) {
-                    snprintf(g_latest, sizeof g_latest, "%d.%d", maj, min);
-                    state = (maj > MOD_VER_MAJOR || (maj == MOD_VER_MAJOR && min > MOD_VER_MINOR)) ? 2 : 1;
+                if (sscanf(b, "%d.%d.%d", &maj, &min, &pat) >= 1) {
+                    if (pat > 0) snprintf(g_latest, sizeof g_latest, "%d.%d.%d", maj, min, pat);
+                    else         snprintf(g_latest, sizeof g_latest, "%d.%d", maj, min);
+                    long latest = maj * 1000000L + min * 1000L + pat;
+                    long mine   = MOD_VER_MAJOR * 1000000L + MOD_VER_MINOR * 1000L + MOD_VER_PATCH;
+                    state = latest > mine ? 2 : 1;
                 }
             }
             Log("update check: HTTP %lu, latest '%s' -> %s", code, g_latest, state == 1 ? "up to date" : state == 2 ? "update available" : "unknown");

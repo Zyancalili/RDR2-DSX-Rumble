@@ -1,9 +1,13 @@
-[size=5][b]RDR2 DSX Rumble[/b][/size] - v1.6
+[size=5][b]RDR2 DSX Rumble[/b][/size] - v1.6.1
 [i]Context-aware rumble, adaptive triggers and lightbar for the DualSense, through DSX.[/i]
 
 [b]First of all, if you find a bug and/or want something added please leave a comment and I will do that.[/b]
 
 [size=4][b]What's new[/b][/size]
+[b]v1.6.1[/b]
+[list]
+[*][b]Deep snow on horseback:[/b] the hooves plunge in heavier and duller, and a low drag rumble swells with every stride, so you feel the horse fighting its way through.
+[/list]
 [b]v1.6[/b]
 [list]
 [*][b]In-game settings menu:[/b] press [b]F11[/b] to change rumble strength, footsteps, horse, guns, fistfights, the response curve, adaptive triggers, lightbar and more. It works with the mouse, the keyboard or the controller, pauses the game while it is open, and saves straight to the ini. There is also a "Test rumble" button.
@@ -18,7 +22,7 @@ Red Dead Redemption 2 on PC gives the DualSense only basic vibration. This mod r
 [b]Rumble[/b]
 [list]
 [*][b]Footsteps[/b] - one pulse per real step, taken from the character's foot bones (not a timer). Walking is light, sprinting is a clear tap.
-[*][b]Horse[/b] - hoofbeats that follow the gait: walk (4-beat), trot (2-beat), canter (3-beat), gallop (rolling 4-beat). Also landings after jumps, a kick when you spur, and a jolt when the horse is hit.
+[*][b]Horse[/b] - hoofbeats that follow the gait: walk (4-beat), trot (2-beat), canter (3-beat), gallop (rolling 4-beat). Also landings after jumps, a kick when you spur, and a jolt when the horse is hit. In deep snow the hoofbeats get heavier and a drag rumble builds, so you feel the resistance.
 [*][b]Gunshots[/b] - every shot is a crisp crack plus a recoil kick, sized to the gun: the .22 Varmint is a tap, revolvers and repeaters a firm kick, rifles stronger, and shotguns and the Elephant Rifle hit hardest. The Schofield and LeMat kick harder than the Cattleman.
 [*][b]Reloading[/b] - a short mechanical click.
 [*][b]Weapon switching[/b] - a crisp detent click when you draw or switch a weapon, a softer one when you holster.

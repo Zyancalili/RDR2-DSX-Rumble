@@ -103,7 +103,7 @@ function Grid($title, $sub, $items, $name, $cols = 3, $maxCh = 170) {
 
 Grid 'Rumble that makes sense' 'Every effect is tuned to how it would feel - snappy where it should be, soft where it should not' @(
     @('Footsteps', 'One tap per real step, read from the foot bones. Softer, longer splashes in water.'),
-    @('Horse', 'Hoofbeats that follow the gait: walk, trot, canter, gallop. Spur kicks, ledge drops, crashes.'),
+    @('Horse', 'Hoofbeats that follow the gait, heavier in deep snow. Spur kicks, ledge drops, crashes.'),
     @('Gunshots', 'A crack plus a recoil kick sized to the gun - from the .22 tap to the Elephant Rifle.'),
     @('Fistfights', 'A hard smack when you take a punch, a knuckle thud when yours lands.'),
     @('Animals', 'Dog and wolf bites that tug, bear mauls, bull rams - and the growl when a bear roars.'),

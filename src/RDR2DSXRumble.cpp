@@ -66,10 +66,12 @@ static fnNativeInit       shInit;
 static fnNativePush64     shPush;
 static fnNativeCall       shCall;
 static HMODULE            g_module;
-#define MOD_VERSION "v1.6"
-#define MOD_VERSION_W L"1.6"
+// Versions: 1.6 -> 1.7 for a new version, 1.6 -> 1.6.1 -> 1.6.2 for bug fixes and small features
+#define MOD_VERSION "v1.6.1"
+#define MOD_VERSION_W L"1.6.1"
 #define MOD_VER_MAJOR 1
 #define MOD_VER_MINOR 6
+#define MOD_VER_PATCH 1
 // latest released version, one line like "1.6" - bumped on GitHub with every Nexus release
 #define UPDATE_PATH L"/Zyancalili/RDR2-DSX-Rumble/main/version.txt"
 typedef int (*fnWorldGetAll)(int* arr, int size);
@@ -174,6 +176,7 @@ namespace N {
     constexpr uint64_t IS_GAMEPLAY_CAM_RENDERING     = 0x8660EA714834E412;
     constexpr uint64_t IS_CINEMATIC_CAM_RENDERING    = 0xBF7C780731AADBF8;
     constexpr uint64_t IS_RADAR_HIDDEN               = 0x1B82FD5FFA4D666E;
+    constexpr uint64_t GET_GROUND_Z_AND_MATERIAL     = 0xBBE5B63EFFB08E68; // _GET_GROUND_Z_AND_MATERIAL_FOR_3D_COORD
     constexpr uint64_t IS_SCREEN_FADED_OUT           = 0xF5472C80DF2FF847;
     constexpr uint64_t IS_LOADING_SCREEN_VISIBLE     = 0xB54ADBE65D528FCB;
 }
@@ -964,6 +967,9 @@ struct State {
     std::vector<std::pair<int, int>> closePeds;   // peds within arm's reach + their last health
     float punchScanT = 0.f, sinceShot = 10.f;
     bool  usingKeyboard = false;
+    // snow under the horse: 0 = none, 1 = deep (smoothed)
+    float snow = 0.f, snowTarget = 0.f, snowScanT = 0.f;
+    uint32_t groundMat = 0;
     // cutscenes: peds nearby that might fire
     struct CinePed { int e; bool was; };
     std::vector<CinePed> cinePeds;
@@ -999,6 +1005,44 @@ static void ResetDSX() {
     S.rgb[0] = S.rgb[1] = S.rgb[2] = -1;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Snow: the ground material under the horse. Deep snow drags at the legs, so the hooves plunge in
+// heavier and a low resistance rumble builds with speed.
+// ---------------------------------------------------------------------------------------------
+static float SnowDepthOf(uint32_t mat) {
+    struct M { const char* name; float depth; };
+    static const M mats[] = {
+        {"snow_deep", 1.f}, {"deep_snow", 1.f}, {"snow_powder", 0.9f}, {"snow_drift", 1.f}, {"snow", 0.75f},
+        {"snow_loose", 0.7f}, {"snow_mud", 0.5f}, {"snow_compact", 0.35f}, {"snow_tarmac", 0.15f},
+        {"snow_grass", 0.4f}, {"snow_rock", 0.2f}, {"snow_gravel", 0.3f}, {"snow_dirt", 0.4f},
+    };
+    static uint32_t hashes[sizeof mats / sizeof mats[0]] = {};
+    if (!hashes[0]) for (size_t i = 0; i < sizeof mats / sizeof mats[0]; i++) hashes[i] = Joaat(mats[i].name);
+    for (size_t i = 0; i < sizeof mats / sizeof mats[0]; i++) if (hashes[i] == mat) return mats[i].depth;
+    return 0.f;
+}
+
+static void ScanSnow(int mount, float dt) {
+    S.snowScanT -= dt;
+    if (S.snowScanT <= 0.f) {               // 4x a second is plenty, snow doesn't change from one step to the next
+        S.snowScanT = 0.25f;
+        Vec3 p = Nat<Vec3>(N::GET_ENTITY_COORDS, mount, true, true);
+        float gz = 0.f; uint32_t mat = 0; int fl = 0;
+        if (Nat<int>(N::GET_GROUND_Z_AND_MATERIAL, p.x, p.y, p.z + 1.0f, 17, &gz, &mat, &fl)) {
+            S.snowTarget = SnowDepthOf(mat);
+            if (mat != S.groundMat) {       // log each surface once, so unknown snow types can be added
+                static std::vector<uint32_t> seen;
+                if (std::find(seen.begin(), seen.end(), mat) == seen.end() && seen.size() < 80) {
+                    seen.push_back(mat);
+                    Log("horse ground: material 0x%08X -> snow %.2f (at %.0f %.0f %.0f)", mat, S.snowTarget, p.x, p.y, p.z);
+                }
+                S.groundMat = mat;
+            }
+        }
+    }
+    S.snow += (S.snowTarget - S.snow) * std::min(1.f, dt / 0.4f);   // ease in and out over a few strides
+}
+
 // Hoofbeat pattern per gait. Offsets are fractions of one stride.
 static void HorseRumble(float speed, float dt) {
     if (speed < 0.6f) { S.hoofPhase = 0; S.hoofIdx = 0; return; }
@@ -1023,11 +1067,21 @@ static void HorseRumble(float speed, float dt) {
             float a = amp * (hind ? 1.f : 0.8f);
             if (S.mountWater > 0.08f)   // hooves in water: duller, longer, splashy - no crisp edge
                 AddPulse(a * 0.85f, a * 0.2f, dur * 1.9f, cfg.horse, 1.8f);
-            else
+            else if (S.snow > 0.15f) {  // plunging into snow: heavier, longer, muffled - the legs fight for every step
+                float k = S.snow;
+                AddPulse(a * (1.f + 0.7f * k), a * 0.25f, dur * (1.f + 1.4f * k), cfg.horse, 4.f - 2.2f * k);
+            } else
                 AddPulse(a, a * 0.45f, dur, cfg.horse, 4.f);   // hoof strike: thud with a crisp edge
         }
     }
     if (S.hoofPhase >= 1.f) S.hoofPhase -= 1.f;
+    if (S.snow > 0.15f) {   // resistance: a low drag that swells with every stride as the legs push through
+        float move  = std::clamp(speed / 6.f, 0.f, 1.f);
+        float swell = 0.7f + 0.3f * sinf(S.hoofPhase * 6.2832f);
+        float drag  = (0.06f + 0.16f * S.snow) * move * swell * cfg.horse;
+        g_contL = std::max(g_contL, drag);
+        g_contR = std::max(g_contR, drag * 0.15f);
+    }
 }
 
 static void FootstepPulse(bool left, float speed) {
@@ -1569,6 +1623,7 @@ static void Tick(float dt) {
             }
             S.waterZoneT -= dt;
             WaterRumble(S.mountWater, horseSpeed, S.river, true, dt);
+            ScanSnow(mount, dt);
             HorseRumble(horseSpeed, dt);
             Vec3 v = Nat<Vec3>(N::GET_ENTITY_VELOCITY, mount, 0);
             HorseDrop(S.mountMinVz, v.z);
