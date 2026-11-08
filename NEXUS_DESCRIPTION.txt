@@ -8,6 +8,7 @@
 [list]
 [*][b]In-game settings menu:[/b] press [b]F11[/b] to change rumble strength, footsteps, horse, guns, fistfights, the response curve, adaptive triggers, lightbar and more. It works with the mouse, the keyboard or the controller, pauses the game while it is open, and saves straight to the ini. There is also a "Test rumble" button.
 [*][b]Update notice:[/b] when you load in, a short card tells you whether the mod is up to date or a new version is out. It checks a tiny version file on GitHub once per start; turn it off with [i]CheckForUpdates=0[/i] or in the menu.
+[*][b]Rumble in cutscenes:[/b] footsteps, hoofbeats, your own shots and the gunfire around you now rumble during cutscenes too. You can switch it off in the F11 menu or with [i]CutsceneRumble=0[/i].
 [/list]
 
 Red Dead Redemption 2 on PC gives the DualSense only basic vibration. This mod reads what is happening in the game and turns it into rumble that makes sense: every footstep, every hoofbeat in the horse's gait, a kick for each shot that matches the gun's calibre, and adaptive triggers modelled on the real weapons.
@@ -31,6 +32,7 @@ Red Dead Redemption 2 on PC gives the DualSense only basic vibration. This mod r
 [*][b]Sliding[/b] - a rough, gravelly scrape while you slide down a slope.
 [*][b]Falls and landings[/b] - from a light bump to a heavy slam, depending on how far you fell. On horseback, drops off ledges and landings after jumps, plus a hard crash when the horse runs into a tree or rock.
 [*][b]Wagons, coaches and trains[/b] - barely felt at a crawl, a hard rattle with frequent bumps at full speed.
+[*][b]Cutscenes[/b] - the same footsteps, hoofbeats and shots while a cutscene plays, plus the gunfire of everyone nearby (a sharp crack up close, a dull thump further away). Optional.
 [*][b]Low health[/b] - a heartbeat (lub-dub) that speeds up as health drops.
 [*][b]Menus[/b] - light clicks on button presses in the pause menu, map, journal, catalogs, shops and the start menu.
 [*][b]Startup splash[/b] - a kick for the gunshot in the startup splash, detected from the game's audio.
@@ -93,6 +95,7 @@ Press [b]F11[/b] in game for the settings menu (mouse, keyboard or controller: D
 [*][b][DSX] AdaptiveTriggers, GallopingTriggersOnHorse, Lightbar[/b] - switch the DSX features on or off.
 [*][b]OnlyWithController[/b] - no rumble while you play with keyboard and mouse.
 [*][b]MuteWhenUnfocused[/b] - rumble stops as soon as you alt-tab out of the game.
+[*][b]CutsceneRumble[/b] - rumble during cutscenes (1 = on, 0 = off).
 [*][b]MenuPausesGame[/b] - the game pauses while the F11 menu is open.
 [*][b]CheckForUpdates[/b] - the startup notice that tells you if a new version is out (reads one small file from GitHub, nothing is sent).
 [/list]

@@ -118,6 +118,7 @@ static MenuItem g_items[] = {
     {"Horse",                  "Rumble",  "Horse",              0, 100, 0, 200, 10},
     {"Guns",                   "Rumble",  "Weapons",            0, 100, 0, 200, 10},
     {"Fistfights",             "Rumble",  "Melee",              0, 100, 0, 200, 10},
+    {"Rumble in cutscenes",    "General", "CutsceneRumble",     1, 1},
     {"Adaptive triggers",      "DSX",     "AdaptiveTriggers",   1, 1},
     {"Lightbar",               "DSX",     "Lightbar",           1, 1},
     {"Menu clicks",            "Menu",    "ButtonRumble",       1, 1},
@@ -167,7 +168,7 @@ static void MenuClose() {
     M.open = false;
     if (M.paused) { NatV(UI::SET_GAME_PAUSED, 0); M.paused = false; }
     S.sentValid = false;              // re-send the weapon's trigger effect
-    g_scriptMenu = false;
+    g_scriptMenu = false; g_settingsMenu = false;
     Log("menu closed");
 }
 
@@ -184,6 +185,7 @@ static void MenuOpen() {
         pk.Send();
     }
     g_pulses.clear();
+    g_settingsMenu = true;
     Log("menu opened");
 }
 

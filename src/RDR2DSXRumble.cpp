@@ -45,6 +45,7 @@
 static std::atomic<bool>     g_quit{false};
 static std::atomic<uint64_t> g_lastTick{0};       // last script tick (GetTickCount64)
 static std::atomic<bool>     g_scriptMenu{false}; // pause menu / UI app open (reported by the script)
+static std::atomic<bool>     g_settingsMenu{false}; // our F11 menu is open (its test rumble must still play)
 static std::atomic<float>    g_gameL{0.f}, g_gameR{0.f};  // in-game rumble for the Direct backend
 static std::atomic<uint32_t> g_padButtons{0};             // live button state of the pad (Btn bits)
 
@@ -169,6 +170,9 @@ namespace N {
     constexpr uint64_t GET_ENTITY_HEADING            = 0xC230DD956E2F5507;
     constexpr uint64_t GET_ENTITY_HEIGHT_ABOVE_GROUND= 0x0D3B5BAEA08F63E9;
     constexpr uint64_t IS_ENTITY_ATTACHED            = 0xEE6AD63ABF59C0B7;
+    constexpr uint64_t GET_RENDERING_CAM             = 0x03A8931ECC8015D6;
+    constexpr uint64_t IS_SCREEN_FADED_OUT           = 0xF5472C80DF2FF847;
+    constexpr uint64_t IS_LOADING_SCREEN_VISIBLE     = 0xB54ADBE65D528FCB;
 }
 constexpr uint32_t INPUT_HORSE_SPRINT = 0x5AA007D7;
 
@@ -217,6 +221,7 @@ struct Config {
     float melee = 1.0f, water = 1.0f, swimming = 1.0f;
     float animals = 1.0f, doors = 1.0f, carry = 1.0f, sliding = 1.0f;
     bool  muteUnfocused = true;
+    bool  cutscenes = true;       // rumble while a cutscene plays
     float landing = 1.0f, vehicle = 1.0f, heartbeat = 1.0f;
     float lowHealth = 0.20f;
     bool  dsx = true, triggers = true, lightbar = true, gallopTriggers = true;
@@ -265,6 +270,7 @@ static void LoadConfig() {
     c.carry      = IniF("Rumble", "Carry", 100) / 100.f;
     c.sliding    = IniF("Rumble", "Sliding", 100) / 100.f;
     c.muteUnfocused = IniI("General", "MuteWhenUnfocused", 1) != 0;
+    c.cutscenes     = IniI("General", "CutsceneRumble", 1) != 0;
     c.damage     = IniF("Rumble", "Damage", 100) / 100.f;
     c.landing    = IniF("Rumble", "Landing", 100) / 100.f;
     c.vehicle    = IniF("Rumble", "Vehicle", 100) / 100.f;
@@ -714,7 +720,7 @@ static DWORD WINAPI PadThread(LPVOID) {
             p.t += dt;
         }
         pulses.erase(std::remove_if(pulses.begin(), pulses.end(), [](const Pulse& p) { return p.t >= p.dur; }), pulses.end());
-        if (cfg.backend == 1 && !menu) { L = std::max(L, g_gameL.load()); R = std::max(R, g_gameR.load()); }
+        if (cfg.backend == 1 && (!menu || g_settingsMenu)) { L = std::max(L, g_gameL.load()); R = std::max(R, g_gameR.load()); }
         if (!focused) { L = R = 0.f; pulses.clear(); }
         int S = (int)(Curve(L, cfg.curve) * 255.f + 0.5f);
         int W = (int)(Curve(R, cfg.curve) * 255.f + 0.5f);
@@ -954,6 +960,10 @@ struct State {
     int   meleeTarget = 0, meleeTargetHp = -1;
     std::vector<std::pair<int, int>> closePeds;   // peds within arm's reach + their last health
     float punchScanT = 0.f, sinceShot = 10.f;
+    // cutscenes: peds nearby that might fire
+    struct CinePed { int e; bool was; };
+    std::vector<CinePed> cinePeds;
+    float cineScanT = 0.f, cineShotCd = 0.f;
     // animals / carrying / doors / horse impacts / sliding
     float biteCooldown = 0.f, bearScanT = 0.f;
     std::vector<int> roaredBears;
@@ -1292,6 +1302,43 @@ static void HealthColor(float ratio, int out[3]) {
     else              { float t = ratio * 2.f;          out[0] = 255; out[1] = (int)(200 * t); out[2] = 0; }
 }
 
+// Cutscene gunfights: the player's own shots are handled as usual, this adds the shots of everyone
+// close by - a sharp crack up close, a dull thump further away.
+static void CutsceneGunfire(int ped, float dt) {
+    if (!shAllPeds || cfg.weapons <= 0.f) return;
+    S.cineScanT -= dt; S.cineShotCd -= dt;
+    Vec3 me = Nat<Vec3>(N::GET_ENTITY_COORDS, ped, true, true);
+    constexpr float kRange = 35.f;
+    if (S.cineScanT <= 0.f) {           // refresh who is close 4x a second
+        S.cineScanT = 0.25f;
+        static int peds[512];
+        int n = shAllPeds(peds, 512);
+        std::vector<State::CinePed> keep;
+        for (int i = 0; i < n && keep.size() < 24; i++) {
+            int t = peds[i];
+            if (t == ped || !Nat<int>(N::IS_PED_HUMAN, t) || Nat<int>(N::IS_ENTITY_DEAD, t)) continue;
+            Vec3 p = Nat<Vec3>(N::GET_ENTITY_COORDS, t, true, true);
+            float dx = p.x - me.x, dy = p.y - me.y, dz = p.z - me.z;
+            if (dx * dx + dy * dy + dz * dz > kRange * kRange) continue;
+            auto it = std::find_if(S.cinePeds.begin(), S.cinePeds.end(), [&](auto& c) { return c.e == t; });
+            keep.push_back({t, it != S.cinePeds.end() && it->was});
+        }
+        S.cinePeds.swap(keep);
+    }
+    for (auto& c : S.cinePeds) {
+        bool sh = Nat<int>(N::IS_PED_SHOOTING, c.e) != 0;
+        if (sh && !c.was && S.cineShotCd <= 0.f) {
+            Vec3 p = Nat<Vec3>(N::GET_ENTITY_COORDS, c.e, true, true);
+            float d = sqrtf((p.x - me.x) * (p.x - me.x) + (p.y - me.y) * (p.y - me.y) + (p.z - me.z) * (p.z - me.z));
+            float a = std::clamp(0.75f - d / kRange * 0.6f, 0.15f, 0.75f);
+            AddPulse(a * 0.15f, a * (d < 10.f ? 1.f : 0.5f), 0.04f, cfg.weapons, 4.5f);   // crack (fades with distance)
+            AddPulse(a * 0.8f, a * 0.2f, 0.08f + a * 0.1f, cfg.weapons, 2.6f);            // boom
+            S.cineShotCd = 0.05f;
+        }
+        c.was = sh;
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Main loop
 // ---------------------------------------------------------------------------------------------
@@ -1309,20 +1356,27 @@ static void Tick(float dt) {
     bool pause    = Nat<int>(N::IS_PAUSE_MENU_ACTIVE) != 0;
     bool uiapp    = Nat<int>(N::IS_ANY_UIAPP_ACTIVE) != 0;
     bool ctrlOn   = Nat<int>(N::IS_PLAYER_CONTROL_ON, player) != 0;
-    bool menu     = pause || (uiapp && !ctrlOn);
+    // A cutscene: the player has no control and a scripted camera is rendering (menus like the map or
+    // journal don't use one). Faded-out screens and loading screens don't count.
+    int  cam      = ctrlOn || pause ? -1 : Nat<int>(N::GET_RENDERING_CAM);
+    bool scripted = !ctrlOn && !pause && cam != -1 && cam != 0;
+    bool cutscene = scripted && !Nat<int>(N::IS_SCREEN_FADED_OUT) && !Nat<int>(N::IS_LOADING_SCREEN_VISIBLE);
+    bool menu     = pause || (uiapp && !ctrlOn && !scripted);
     g_scriptMenu  = menu;
     bool control  = ctrlOn && !menu;
     bool keyboard = cfg.onlyWithController && Nat<int>(N::IS_USING_KEYBOARD, 0) != 0;
     {
         static int lastState = -1;
-        int st = (pause ? 1 : 0) | (uiapp ? 2 : 0) | (ctrlOn ? 4 : 0) | (keyboard ? 8 : 0);
+        int st = (pause ? 1 : 0) | (uiapp ? 2 : 0) | (ctrlOn ? 4 : 0) | (keyboard ? 8 : 0) | (cutscene ? 16 : 0);
         if (st != lastState) {
-            Log("state: pause=%d uiapp=%d control=%d keyboard=%d -> menu=%d", (int)pause, (int)uiapp, (int)ctrlOn, (int)keyboard, (int)menu);
+            Log("state: pause=%d uiapp=%d control=%d keyboard=%d cutscene=%d (cam %d) -> menu=%d", (int)pause, (int)uiapp,
+                (int)ctrlOn, (int)keyboard, (int)cutscene, cam, (int)menu);
             lastState = st;
         }
     }
+    bool cine     = cutscene && cfg.cutscenes;
     bool dead     = Nat<int>(N::IS_ENTITY_DEAD, ped) != 0;
-    bool allowed  = control && !keyboard && g_focused;
+    bool allowed  = (control || cine) && !keyboard && g_focused;
 
     g_contL = g_contR = 0;
     S.shotCooldown -= dt;
@@ -1482,6 +1536,7 @@ static void Tick(float dt) {
     }
     S.wasInWater = inWater;
     if (swimming && !dead) SwimRumble(ped, dt);
+    if (cine) CutsceneGunfire(ped, dt); else S.cinePeds.clear();
     if (!dead) { Carrying(ped); BearRoars(ped, dt); if (!onMount && !inVehicle) Doors(ped, dt); }
 
     // --- movement ------------------------------------------------------------------------------
