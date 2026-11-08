@@ -1,6 +1,8 @@
 [size=5][b]RDR2 Controller Rumble[/b][/size] - v1.6
 [i]Rumble that follows what happens in the game - for DualSense and Xbox controllers. (Formerly "RDR2 DSX Rumble".)[/i]
 
+[b]30+ rumble effects, each one fine-tuned by hand[/b] - plus [b]12 adaptive trigger profiles[/b] for the weapons on the DualSense.
+
 [b]DualSense users: [url=https://store.steampowered.com/app/1812620/DSX/]DSX[/url] is required.[/b] It's the best way to play: you also get adaptive triggers and the lightbar. Xbox controllers work without anything extra.
 
 [b]First of all, if you find a bug and/or want something added please leave a comment and I will do that.[/b]
