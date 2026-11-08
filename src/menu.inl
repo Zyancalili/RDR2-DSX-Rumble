@@ -236,7 +236,7 @@ static void MenuDraw(float cursorX, float cursorY) {
     Rect(px, py, pw, 0.003f, 245, 230, 200, 120);
     Rect(px, py + kPanelH - 0.003f, pw, 0.003f, 245, 230, 200, 120);
 
-    Text("DSX RUMBLE", 0.5f, py + 0.022f, 54, "title", Center, 245, 230, 200);
+    Text("CONTROLLER RUMBLE", 0.5f, py + 0.034f, 36, "title", Center, 245, 230, 200);
     Rect(0.5f - pw * 0.30f, py + 0.105f, pw * 0.60f, 0.002f, 245, 230, 200, 170);
     Text("Settings  -  " MOD_VERSION, 0.5f, py + 0.112f, 22, "body", Center, 215, 185, 150);
 
@@ -423,7 +423,7 @@ static void UpdateNotice(float dt) {
     Rect(x, y, w, 0.002f, 245, 230, 200, 140);
     int st = g_updState.load();
     char line[128];
-    Text("DSX RUMBLE " MOD_VERSION, x + 0.012f, y + 0.010f, 26, "title", Left, 245, 230, 200);
+    Text("CONTROLLER RUMBLE " MOD_VERSION, x + 0.012f, y + 0.010f, 26, "title", Left, 245, 230, 200);
     if (st == 2) snprintf(line, sizeof line, "Version %s is out - get it on Nexus Mods.   F11: settings", g_latest);
     else if (st == 1) snprintf(line, sizeof line, "The mod is up to date.   F11: settings");
     else snprintf(line, sizeof line, "Loaded.   F11: settings");

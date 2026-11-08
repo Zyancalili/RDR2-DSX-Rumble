@@ -1,4 +1,4 @@
-# Renders the Nexus media for RDR2 DSX Rumble into .\media
+# Renders the Nexus media for RDR2 Controller Rumble into .\media
 #   powershell -ExecutionPolicy Bypass -File tools_media.ps1 -version v1.5
 param([string]$version = 'v1.5')
 Add-Type -AssemblyName System.Drawing
@@ -66,19 +66,20 @@ function Panel($g, $x, $y, $w, $h) {
 # ---------------------------------------------------------------------------- 1. header banner 1300x372
 $c = New-Canvas 1300 372; $bmp = $c[0]; $g = $c[1]
 Draw-Scene $g 1300 372 1010 300 70 300
-Text $g 'DSX RUMBLE' (F 84 'Bold') $cream 60 70 900 120 'Near' $true
+Text $g 'CONTROLLER RUMBLE' (F 50 'Bold') $cream 60 100 1100 90 'Near' $true
 $g.DrawLine((New-Object System.Drawing.Pen (C 200 245 230 200), 2), 66, 190, 640, 190)
-Text $g 'Feel every step, hoofbeat and shot on your DualSense' (F 24 'Italic') $cream 64 200 900 50
-Text $g 'Rumble  -  Adaptive triggers  -  Lightbar' (F 17 'Bold' 'Segoe UI') $dim 66 250 900 40
+Text $g 'Feel every step, hoofbeat and shot on your controller' (F 24 'Italic') $cream 64 200 1000 50
+Text $g 'DualSense and Xbox  -  best with a DualSense: adaptive triggers and lightbar' (F 17 'Bold' 'Segoe UI') $dim 66 250 1000 40
 Text $g $version (F 18 'Bold' 'Segoe UI') $cream 0 330 1280 40 'Far'
 Save $bmp $g 'banner_1300x372.png'
 
 # ---------------------------------------------------------------------------- 2. cover 1920x1080
 $c = New-Canvas 1920 1080; $bmp = $c[0]; $g = $c[1]
 Draw-Scene $g 1920 1080 960 760 150 800
-Text $g 'DSX RUMBLE' (F 150 'Bold') $cream 0 120 1920 220 'Center' $true
+Text $g 'CONTROLLER RUMBLE' (F 92 'Bold') $cream 0 170 1920 160 'Center' $true
 $g.DrawLine((New-Object System.Drawing.Pen (C 200 245 230 200), 3), 560, 320, 1360, 320)
-Text $g 'Feel every step, hoofbeat and shot on your DualSense' (F 46 'Italic') $cream 0 330 1920 80 'Center'
+Text $g 'Feel every step, hoofbeat and shot on your controller' (F 46 'Italic') $cream 0 330 1920 80 'Center'
+Text $g 'Best with a DualSense  -  works with Xbox controllers too' (F 28 'Bold' 'Segoe UI') $dim 0 410 1920 50 'Center'
 Text $g $version (F 30 'Bold' 'Segoe UI') $cream 0 1010 1880 60 'Far'
 Save $bmp $g '1_cover.png'
 

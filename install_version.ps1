@@ -1,4 +1,4 @@
-# Installs a released version of RDR2 DSX Rumble into the game folder - use it to go back to an older version.
+# Installs a released version of RDR2 Controller Rumble into the game folder - use it to go back to an older version.
 #   powershell -ExecutionPolicy Bypass -File install_version.ps1 -Version 1.5
 #   powershell -ExecutionPolicy Bypass -File install_version.ps1            (lists the available versions)
 param([string]$Version = '', [string]$GameDir = 'E:\SteamLibrary\steamapps\common\Red Dead Redemption 2')
@@ -22,4 +22,4 @@ Expand-Archive $zip $tmp
 Copy-Item (Join-Path $tmp 'RDR2DSXRumble.asi') $GameDir -Force
 if (-not (Test-Path (Join-Path $GameDir 'RDR2DSXRumble.ini'))) { Copy-Item (Join-Path $tmp 'RDR2DSXRumble.ini') $GameDir }
 Remove-Item $tmp -Recurse -Force
-"Installed RDR2 DSX Rumble v$Version into $GameDir (your RDR2DSXRumble.ini was kept)."
+"Installed RDR2 Controller Rumble v$Version into $GameDir (your RDR2DSXRumble.ini was kept)."

@@ -1,4 +1,6 @@
-﻿// RDR2 DSX Rumble - context-aware rumble + adaptive triggers + lightbar for the DualSense via DSX.
+﻿// RDR2 Controller Rumble (formerly RDR2 DSX Rumble) - context-aware rumble for DualSense (via DSX) and Xbox
+// controllers. Adaptive triggers + lightbar on the DualSense. Files keep the old RDR2DSXRumble name so updates
+// replace the old version instead of running next to it.
 //
 //  * Rumble       : footsteps, hoofbeats per gait, gunshots per weapon class, reloads, damage,
 //                   landings, wagon/train roughness, low-health heartbeat.
@@ -67,11 +69,11 @@ static fnNativePush64     shPush;
 static fnNativeCall       shCall;
 static HMODULE            g_module;
 // Versions: 1.6 -> 1.7 for a new version, 1.6 -> 1.6.1 -> 1.6.2 for bug fixes and small features
-#define MOD_VERSION "v1.6.1"
-#define MOD_VERSION_W L"1.6.1"
+#define MOD_VERSION "v1.6"
+#define MOD_VERSION_W L"1.6"
 #define MOD_VER_MAJOR 1
 #define MOD_VER_MINOR 6
-#define MOD_VER_PATCH 1
+#define MOD_VER_PATCH 0
 // latest released version, one line like "1.6" - bumped on GitHub with every Nexus release
 #define UPDATE_PATH L"/Zyancalili/RDR2-DSX-Rumble/main/version.txt"
 typedef int (*fnWorldGetAll)(int* arr, int size);
@@ -497,8 +499,11 @@ namespace Pad {
         if (OpenDS4()) return;
         if (xget) {   // DSX in Xbox mode
             XState s;
-            for (int i = 0; i < 4; i++) if (xget(i, &s) == 0) { if (xuser != i) Log("pad: XInput user %d", i); xuser = i; return; }
+            // an Xbox controller (or DSX in Xbox mode) - rumble works the same, there are just no adaptive triggers
+            for (int i = 0; i < 4; i++) if (xget(i, &s) == 0) { if (xuser != i) Log("pad: Xbox controller (XInput user %d)", i); xuser = i; return; }
         }
+        static bool warned = false;
+        if (!warned) { warned = true; Log("pad: no controller found yet - start DSX (DualSense) or plug in an Xbox controller"); }
         xuser = -1;
     }
 
@@ -1727,7 +1732,7 @@ static void Tick(float dt) {
 static void ScriptMain() {
     srand(GetTickCount());
     LoadConfig();
-    Log("RDR2 DSX Rumble " MOD_VERSION " - script started (backend=%s, dsx=%d)", cfg.backend ? "Direct" : "Game", (int)cfg.dsx);
+    Log("RDR2 Controller Rumble " MOD_VERSION " - script started (backend=%s, dsx=%d)", cfg.backend ? "Direct" : "Game", (int)cfg.dsx);
     InitWeapons();
     DSX::Open();
     StartUpdateCheck();
@@ -1780,7 +1785,7 @@ BOOL APIENTRY DllMain(HMODULE mod, DWORD reason, LPVOID) {
         snprintf(g_logPath, MAX_PATH, "%sRDR2DSXRumble.log", g_dir);
         DeleteFileA(g_logPath);
         LoadConfig();
-        Log("RDR2 DSX Rumble loaded");
+        Log("RDR2 Controller Rumble loaded");
         if (HANDLE t = CreateThread(nullptr, 0, PadThread, nullptr, 0, nullptr)) CloseHandle(t);
         if (!BindScriptHook()) { Log("ScriptHookRDR2.dll not found or incompatible - in-game features inactive"); return TRUE; }
         shRegister(mod, ScriptMain);
