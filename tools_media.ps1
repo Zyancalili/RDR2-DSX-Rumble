@@ -1,6 +1,6 @@
 # Renders the Nexus media for RDR2 Controller Rumble into .\media
-#   powershell -ExecutionPolicy Bypass -File tools_media.ps1 -version v1.5
-param([string]$version = 'v1.5')
+#   powershell -ExecutionPolicy Bypass -File tools_media.ps1 -version v1.6
+param([string]$version = 'v1.6')
 Add-Type -AssemblyName System.Drawing
 $out = Join-Path $PSScriptRoot 'media'
 New-Item -ItemType Directory -Force $out | Out-Null
@@ -21,7 +21,7 @@ function New-Canvas($w, $h) {
 }
 
 # dusk sky + sun + rumble rings + mesa horizon. $sx,$sy = sun centre, $sr = sun radius, $hz = horizon y
-function Draw-Scene($g, $w, $h, $sx, $sy, $sr, $hz, [bool]$rings = $true) {
+function Draw-SceneRaw($g, $w, $h, $sx, $sy, $sr, $hz, [bool]$rings = $true) {
     $rect = New-Object System.Drawing.Rectangle 0, 0, $w, $h
     $sky = New-Object System.Drawing.Drawing2D.LinearGradientBrush $rect, (C 255 0 0 0), (C 255 0 0 0), 90
     $blend = New-Object System.Drawing.Drawing2D.ColorBlend 4
@@ -30,7 +30,8 @@ function Draw-Scene($g, $w, $h, $sx, $sy, $sr, $hz, [bool]$rings = $true) {
     $sky.InterpolationColors = $blend
     $g.FillRectangle($sky, $rect)
     $glow = [int]($sr * 2.8)
-    for ($r = $glow; $r -gt 0; $r -= 4) {
+    $step = [Math]::Max(1, [int]($sr / 40))
+    for ($r = $glow; $r -gt 0; $r -= $step) {
         $a = [int](60 * (1 - $r / [double]$glow))
         $g.FillEllipse((New-Object System.Drawing.SolidBrush (C $a 255 190 90)), $sx - $r, $sy - $r, 2 * $r, 2 * $r)
     }
@@ -49,6 +50,23 @@ function Draw-Scene($g, $w, $h, $sx, $sy, $sr, $hz, [bool]$rings = $true) {
     foreach ($p in $pts) { $poly.Add((New-Object System.Drawing.PointF ([single]($p[0] * $k)), ([single]($hz + $p[1] * $k)))) }
     $poly.Add((New-Object System.Drawing.PointF $w, $h)); $poly.Add((New-Object System.Drawing.PointF 0, $h))
     $g.FillPolygon($ground, $poly.ToArray())
+}
+
+# The same scene, pixelated like the in-game F11 menu backdrop: drawn at 1/160 of the width without
+# smoothing, then scaled up with hard pixel edges. Text and panels go on top afterwards and stay sharp.
+function Draw-Scene($g, $w, $h, $sx, $sy, $sr, $hz, [bool]$rings = $true) {
+    $px = [Math]::Max(4, [int][Math]::Round($w / 160.0))
+    $sw = [int][Math]::Ceiling($w / $px); $sh = [int][Math]::Ceiling($h / $px)
+    $small = New-Object System.Drawing.Bitmap $sw, $sh
+    $sg = [System.Drawing.Graphics]::FromImage($small)
+    $sg.SmoothingMode = 'None'
+    Draw-SceneRaw $sg $sw $sh ($sx / $px) ($sy / $px) ($sr / $px) ($hz / $px) $rings
+    $sg.Dispose()
+    $oldI = $g.InterpolationMode; $oldP = $g.PixelOffsetMode
+    $g.InterpolationMode = 'NearestNeighbor'; $g.PixelOffsetMode = 'Half'
+    $g.DrawImage($small, (New-Object System.Drawing.Rectangle 0, 0, ($sw * $px), ($sh * $px)))
+    $g.InterpolationMode = $oldI; $g.PixelOffsetMode = $oldP
+    $small.Dispose()
 }
 
 function Text($g, $s, $font, $brush, $x, $y, $w, $h, $align = 'Near', [bool]$shade = $false) {
