@@ -2,6 +2,8 @@
 [i]Context-aware rumble for DualSense and Xbox controllers. Best with a DualSense: through DSX you also get adaptive triggers and the lightbar.[/i]
 [i](Formerly "RDR2 DSX Rumble".)[/i]
 
+[b]DualSense users: [url=https://store.steampowered.com/app/1812620/DSX/]DSX[/url] is required.[/b] The mod talks to the DualSense through DSX - without it a DualSense gets no rumble at all. Xbox controllers need nothing extra.
+
 [b]First of all, if you find a bug and/or want something added please leave a comment and I will do that.[/b]
 
 [size=4][b]What's new[/b][/size]
@@ -18,7 +20,7 @@ Red Dead Redemption 2 on PC gives controllers only basic vibration. This mod rea
 
 [b]Which controller?[/b]
 [list]
-[*][b]DualSense (recommended):[/b] everything - rumble, adaptive triggers and lightbar. Needs DSX.
+[*][b]DualSense (recommended):[/b] everything - rumble, adaptive triggers and lightbar. [b]DSX is required[/b] (Steam, v3).
 [*][b]Xbox controller:[/b] all the rumble effects. Nothing else to install.
 [/list]
 
@@ -68,7 +70,7 @@ Red Dead Redemption 2 on PC gives controllers only basic vibration. This mod rea
 [*][url=https://www.dev-c.com/rdr2/scripthookrdr2/]Script Hook RDR2[/url] by Alexander Blade (includes the ASI loader, [i]dinput8.dll[/i])
 [*]A controller:
 [list]
-[*][b]DualSense (recommended)[/b] with [url=https://store.steampowered.com/app/1812620/DSX/]DSX[/url] (Steam, v3) running, or
+[*][b]DualSense (recommended)[/b] - requires [url=https://store.steampowered.com/app/1812620/DSX/]DSX[/url] (Steam, v3) running, or
 [*][b]an Xbox controller[/b] (Xbox One / Series, wired or wireless) - nothing else needed
 [/list]
 [/list]
