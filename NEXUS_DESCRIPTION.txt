@@ -1,13 +1,13 @@
-[size=5][b]RDR2 DSX Rumble[/b][/size] - v1.5
+[size=5][b]RDR2 DSX Rumble[/b][/size] - v1.6
 [i]Context-aware rumble, adaptive triggers and lightbar for the DualSense, through DSX.[/i]
 
 [b]First of all, if you find a bug and/or want something added please leave a comment and I will do that.[/b]
 
 [size=4][b]What's new[/b][/size]
-[b]v1.5[/b]
+[b]v1.6[/b]
 [list]
-[*]Fixed: no rumble when your punch lands. The mod now watches everyone within arm's reach, so every landed blow gives a firm knuckle thud (heavier on a knockout).
-[*]Taking a punch is detected more reliably too, even when the game doesn't flag the fight as melee.
+[*][b]In-game settings menu:[/b] press [b]F11[/b] to change rumble strength, footsteps, horse, guns, fistfights, the response curve, adaptive triggers, lightbar and more. It works with the mouse, the keyboard or the controller, pauses the game while it is open, and saves straight to the ini. There is also a "Test rumble" button.
+[*][b]Update notice:[/b] when you load in, a short card tells you whether the mod is up to date or a new version is out. It checks a tiny version file on GitHub once per start; turn it off with [i]CheckForUpdates=0[/i] or in the menu.
 [/list]
 
 Red Dead Redemption 2 on PC gives the DualSense only basic vibration. This mod reads what is happening in the game and turns it into rumble that makes sense: every footstep, every hoofbeat in the horse's gait, a kick for each shot that matches the gun's calibre, and adaptive triggers modelled on the real weapons.
@@ -83,7 +83,7 @@ Red Dead Redemption 2\
 [/code]
 
 [size=4][b]Configuration[/b][/size]
-Everything is set in [b]RDR2DSXRumble.ini[/b]. Changes apply [b]while the game is running[/b] (within about 2 seconds).
+Press [b]F11[/b] in game for the settings menu (mouse, keyboard or controller: D-pad, Cross, Circle). Everything else is in [b]RDR2DSXRumble.ini[/b]; changes there apply [b]while the game is running[/b] (within about 2 seconds).
 [list]
 [*][b]Intensity[/b] - overall strength in % (0-200).
 [*][b]ResponseCurve[/b] - how far soft effects are pushed down compared to strong ones (1.0 = linear, 1.5 recommended, 2.0 = bigger gap).
@@ -93,6 +93,8 @@ Everything is set in [b]RDR2DSXRumble.ini[/b]. Changes apply [b]while the game i
 [*][b][DSX] AdaptiveTriggers, GallopingTriggersOnHorse, Lightbar[/b] - switch the DSX features on or off.
 [*][b]OnlyWithController[/b] - no rumble while you play with keyboard and mouse.
 [*][b]MuteWhenUnfocused[/b] - rumble stops as soon as you alt-tab out of the game.
+[*][b]MenuPausesGame[/b] - the game pauses while the F11 menu is open.
+[*][b]CheckForUpdates[/b] - the startup notice that tells you if a new version is out (reads one small file from GitHub, nothing is sent).
 [/list]
 
 [size=4][b]Compatibility[/b][/size]

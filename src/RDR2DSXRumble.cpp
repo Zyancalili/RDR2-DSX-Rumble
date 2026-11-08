@@ -38,7 +38,9 @@
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "winmm.lib")
 #pragma comment(lib, "user32.lib")
+#pragma comment(lib, "winhttp.lib")
 #include <timeapi.h>
+#include <winhttp.h>
 
 static std::atomic<bool>     g_quit{false};
 static std::atomic<uint64_t> g_lastTick{0};       // last script tick (GetTickCount64)
@@ -63,7 +65,12 @@ static fnNativeInit       shInit;
 static fnNativePush64     shPush;
 static fnNativeCall       shCall;
 static HMODULE            g_module;
-#define MOD_VERSION "v1.5"
+#define MOD_VERSION "v1.6"
+#define MOD_VERSION_W L"1.6"
+#define MOD_VER_MAJOR 1
+#define MOD_VER_MINOR 6
+// latest released version, one line like "1.6" - bumped on GitHub with every Nexus release
+#define UPDATE_PATH L"/Zyancalili/RDR2-DSX-Rumble/main/version.txt"
 typedef int (*fnWorldGetAll)(int* arr, int size);
 static fnWorldGetAll      shAllPeds, shAllObjects;
 
@@ -1589,12 +1596,15 @@ static void Tick(float dt) {
     if (!pk.Empty()) { pk.Send(); S.lastDsx = now; }
 }
 
+#include "menu.inl"
+
 static void ScriptMain() {
     srand(GetTickCount());
     LoadConfig();
     Log("RDR2 DSX Rumble " MOD_VERSION " - script started (backend=%s, dsx=%d)", cfg.backend ? "Direct" : "Game", (int)cfg.dsx);
     InitWeapons();
     DSX::Open();
+    StartUpdateCheck();
     FILETIME iniT = IniTime();
     DWORD lastCheck = GetTickCount();
     LARGE_INTEGER f, prev, cur;
@@ -1621,9 +1631,15 @@ static void ScriptMain() {
         }
 
         g_lastTick = GetTickCount64();
-        if (cfg.enabled) Tick(dt);
-        else if (wasEnabled) { StopRumble(); ResetDSX(); }
-        wasEnabled = cfg.enabled;
+        if (MenuFrame(dt)) {              // settings menu open: only its own test rumble plays
+            g_contL = g_contR = 0;
+            OutputRumble(dt, g_focused);
+        } else {
+            if (cfg.enabled) Tick(dt);
+            else if (wasEnabled) { StopRumble(); ResetDSX(); }
+            wasEnabled = cfg.enabled;
+            UpdateNotice(dt);
+        }
         shWait(0);
     }
 }
