@@ -1,45 +1,44 @@
-# RDR2 DSX Rumble
+# RDR2 Controller Rumble
 
-A ScriptHookRDR2 `.asi` that gives the DualSense rumble that follows what happens in the game. It also drives the adaptive triggers and the lightbar through DSX.
+A Script Hook RDR2 mod that adds rumble that follows what happens in the game: footsteps, hoofbeats, guns, fights, wagons, water, cutscenes and more. It's best with a **DualSense**, which also gets adaptive triggers per weapon and a health lightbar. Xbox controllers get the rumble.
 
-## What it does
+Formerly "RDR2 DSX Rumble". The files keep the old `RDR2DSXRumble` name so updates replace the old version.
 
-| Situation | Rumble | DSX (UDP) |
-|---|---|---|
-| Walking / running / sprinting | A pulse on every footstep, taken from the foot bones and stronger at higher speed. Left foot uses the left motor, right foot the right motor (XInput backend). If the bones don't work, steps are paced from speed instead. | – |
-| Horse | Hoofbeats that change with the gait: walk (4-beat), trot (2-beat), canter (3-beat), gallop (rolling 4-beat). Also landings after jumps, a kick when spurring, and a jolt when the horse is hit. | Galloping effect in both triggers while cantering or galloping |
-| Shooting | A kick for each shot, set per weapon class: pistol < revolver < repeater < rifle < sniper/elephant < shotgun. Bow and thrown weapons get a light pulse. | RT: trigger break for each class (SemiAutomaticGun), Bow draw for bows, tension for the lasso. LT: light aim resistance |
-| Reloading | Short tick | – |
-| Taking damage / death | Strength scales with the damage taken | Lightbar flashes red |
-| Fall / jump landing | Scales with how fast you were falling | – |
-| Wagon, coach, train | Rough base rumble plus random bumps, scaled by speed | – |
-| Menu button presses | A tick on each press in the start menu, pause menu, map, journal, catalogs and shops. Cross is firmer, circle softer, the D-pad gives a light tick | – |
-| Startup splash | A strong kick on the gunshot in the startup splash, detected from the game's audio level | – |
-| Low health | Heartbeat double-pulse that speeds up as health drops | Lightbar pulses. Its colour follows health (green → yellow → red) |
+- Download: [Releases](https://github.com/Zyancalili/RDR2-DSX-Rumble/releases) or [Nexus Mods](https://www.nexusmods.com/reddeadredemption2/mods/11490)
+- Story mode only.
 
-Rumble is off in cutscenes or menus without player control, and with keyboard/mouse (setting `OnlyWithController`).
+## Requirements
 
-## Why rumble doesn't go over UDP
-
-The DSX v3 UDP API only accepts trigger, RGB, player-LED, mic-LED and reset instructions. It has no rumble command. So the mod sends rumble to the controller the game sees, which is the DSX virtual pad, and DSX passes it on to the DualSense (rumble, or rumble-to-haptics if you enabled that in DSX):
-
-* `Backend=Game` (default): uses the game's vibration (`SET_CONTROL_SHAKE`). Keep in-game vibration on.
-* `Backend=Direct`: writes rumble reports straight to DSX's virtual DualShock 4 (or XInput if DSX emulates an Xbox pad). This is more precise and gives left/right separation.
-
-Menus and the startup splash always use the direct path, because the game's scripts aren't running there. A background thread reads the buttons from the virtual pad and measures the game's audio level.
+- [Script Hook RDR2](https://www.dev-c.com/rdr2/scripthookrdr2/)
+- DualSense + [DSX](https://store.steampowered.com/app/1812620/DSX/) (DSX is required for the DualSense), or an Xbox controller (nothing extra needed)
 
 ## Install
 
-1. Copy `RDR2DSXRumble.asi` and `RDR2DSXRumble.ini` into
-   `E:\SteamLibrary\steamapps\common\Red Dead Redemption 2`. ScriptHookRDR2 and the ASI loader are already installed there.
-2. In DSX: turn on Incoming UDP (port 6969, the default) and use an emulated Xbox controller.
-3. **Conflicts:** `NodixDualSense.asi` (DualSense haptics/triggers) is also in the game folder. Running it alongside this mod can cause doubled effects and a fight over the triggers. If that happens, rename it to `.asi.off`.
+1. Install Script Hook RDR2.
+2. Copy `RDR2DSXRumble.asi` and `RDR2DSXRumble.ini` into the game folder, next to `RDR2.exe`.
+3. DualSense only: in DSX turn on **Incoming UDP** (Settings > Networking, port 6969) and turn **Rumble to Haptics off**. Start DSX before the game.
 
-Settings are in `RDR2DSXRumble.ini` and reload while the game runs. The log is written to `RDR2DSXRumble.log` in the game folder.
+Press **F11** in game for the settings menu. Everything else is in `RDR2DSXRumble.ini`, which reloads while the game runs. The log is `RDR2DSXRumble.log` in the game folder.
+
+## How it works
+
+- Rumble goes to the controller the game sees: the DSX virtual DualShock 4 over HID, or an Xbox pad over XInput when no DSX pad is found. The DSX UDP API has no rumble command.
+- Adaptive triggers and the lightbar go to DSX over UDP (`127.0.0.1:6969`).
+- Game state comes from natives via Script Hook RDR2. The exports are resolved at runtime, so no SDK is needed to build. Native hashes are from [alloc8or's RDR3 native database](https://github.com/alloc8or/rdr3-nativedb-data).
+- On startup the mod checks the latest [GitHub release](https://github.com/Zyancalili/RDR2-DSX-Rumble/releases/latest) and shows a short notice if there is a newer version (`CheckForUpdates=0` turns this off). `version.txt` is only kept for v1.6 and older, which read that file.
 
 ## Build
 
 ```
 build.bat C:\path\to\llvm-mingw\bin
 ```
-You can also run `build.bat` from a Visual Studio Developer prompt. The source is `src/RDR2DSXRumble.cpp` and needs no SDK, because the ScriptHookRDR2 exports are resolved at runtime.
+
+Or run `build.bat` from a Visual Studio Developer prompt. The source is `src/RDR2DSXRumble.cpp` (plus `src/menu.inl` for the F11 menu and update check).
+
+Other files: `tools_media.ps1` renders the Nexus images in `media/`, `NEXUS_DESCRIPTION.txt` is the Nexus page text, and `install_version.ps1` copies a zip from `releases/` into the game folder.
+
+## License
+
+BSD 2-Clause, see [LICENSE](LICENSE).
+
+This mod is vibecoded: it was written with the help of AI (Claude).

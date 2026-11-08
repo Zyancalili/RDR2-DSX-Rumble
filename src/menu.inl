@@ -368,15 +368,19 @@ static DWORD WINAPI UpdateThread(LPVOID) {
     HINTERNET s = WinHttpOpen(L"RDR2DSXRumble/" MOD_VERSION_W, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (s) {
         WinHttpSetTimeouts(s, 4000, 4000, 4000, 4000);
-        HINTERNET c = WinHttpConnect(s, L"raw.githubusercontent.com", INTERNET_DEFAULT_HTTPS_PORT, 0);
+        // Latest GitHub release: {"...","tag_name":"v1.6.1",...}. The API wants a User-Agent (set by WinHttpOpen).
+        HINTERNET c = WinHttpConnect(s, UPDATE_HOST, INTERNET_DEFAULT_HTTPS_PORT, 0);
         HINTERNET r = c ? WinHttpOpenRequest(c, L"GET", UPDATE_PATH, nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE) : nullptr;
-        if (r && WinHttpSendRequest(r, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) && WinHttpReceiveResponse(r, nullptr)) {
+        if (r && WinHttpSendRequest(r, L"Accept: application/vnd.github+json\r\n", (DWORD)-1L, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) && WinHttpReceiveResponse(r, nullptr)) {
             DWORD code = 0, sz = sizeof code;
             WinHttpQueryHeaders(r, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &code, &sz, WINHTTP_NO_HEADER_INDEX);
-            char body[64] = {}; DWORD got = 0;
-            if (code == 200 && WinHttpReadData(r, body, sizeof body - 1, &got)) {
+            std::string body; char buf[4096]; DWORD got = 0;
+            while (code == 200 && body.size() < 256 * 1024 && WinHttpReadData(r, buf, sizeof buf, &got) && got) body.append(buf, got);
+            size_t at = body.find("\"tag_name\"");
+            if (at != std::string::npos) at = body.find('"', body.find(':', at));   // opening quote of the value
+            if (at != std::string::npos) {
                 int maj = 0, min = 0, pat = 0;
-                const char* b = body; while (*b == 'v' || *b == 'V' || *b == ' ') b++;
+                const char* b = body.c_str() + at + 1; while (*b == 'v' || *b == 'V' || *b == ' ') b++;
                 if (sscanf(b, "%d.%d.%d", &maj, &min, &pat) >= 1) {
                     if (pat > 0) snprintf(g_latest, sizeof g_latest, "%d.%d.%d", maj, min, pat);
                     else         snprintf(g_latest, sizeof g_latest, "%d.%d", maj, min);

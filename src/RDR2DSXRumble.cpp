@@ -69,13 +69,15 @@ static fnNativePush64     shPush;
 static fnNativeCall       shCall;
 static HMODULE            g_module;
 // Versions: 1.6 -> 1.7 for a new version, 1.6 -> 1.6.1 -> 1.6.2 for bug fixes and small features
-#define MOD_VERSION "v1.6"
-#define MOD_VERSION_W L"1.6"
+#define MOD_VERSION "v1.6.1"
+#define MOD_VERSION_W L"1.6.1"
 #define MOD_VER_MAJOR 1
 #define MOD_VER_MINOR 6
-#define MOD_VER_PATCH 0
-// latest released version, one line like "1.6" - bumped on GitHub with every Nexus release
-#define UPDATE_PATH L"/Zyancalili/RDR2-DSX-Rumble/main/version.txt"
+#define MOD_VER_PATCH 1
+// Update check: the tag of the latest GitHub release (tags look like v1.6 / v1.6.1).
+// (v1.6 and older read version.txt in the repo instead - keep that file in step for them.)
+#define UPDATE_HOST L"api.github.com"
+#define UPDATE_PATH L"/repos/Zyancalili/RDR2-DSX-Rumble/releases/latest"
 typedef int (*fnWorldGetAll)(int* arr, int size);
 static fnWorldGetAll      shAllPeds, shAllObjects;
 

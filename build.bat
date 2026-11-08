@@ -9,7 +9,7 @@ if not "%~1"=="" set "PATH=%~1;%PATH%"
 where x86_64-w64-mingw32-clang++ >nul 2>nul
 if %errorlevel%==0 (
   x86_64-w64-mingw32-clang++ -std=c++17 -O2 -Wall -Wno-unused-parameter -shared -static -s ^
-    -o RDR2DSXRumble.asi src\RDR2DSXRumble.cpp -lws2_32 -lhid -lsetupapi -lole32 -lwinmm || goto :fail
+    -o RDR2DSXRumble.asi src\RDR2DSXRumble.cpp -lws2_32 -lhid -lsetupapi -lole32 -lwinmm -lwinhttp || goto :fail
   goto :ok
 )
 

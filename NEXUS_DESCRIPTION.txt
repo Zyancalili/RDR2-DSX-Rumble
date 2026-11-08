@@ -1,4 +1,4 @@
-[size=5][b]RDR2 Controller Rumble[/b][/size] - v1.6
+[size=5][b]RDR2 Controller Rumble[/b][/size] - v1.6.1
 [i]Rumble that follows what happens in the game - for DualSense and Xbox controllers. (Formerly "RDR2 DSX Rumble".)[/i]
 
 [b]30+ rumble effects, each one fine-tuned by hand[/b] - plus [b]12 adaptive trigger profiles[/b] for the weapons on the DualSense.
@@ -7,13 +7,10 @@
 
 [b]First of all, if you find a bug and/or want something added please leave a comment and I will do that.[/b]
 
-[size=4][b]What's new in v1.6[/b][/size]
+[size=4][b]What's new in v1.6.1[/b][/size]
 [list]
-[*]Xbox controller support (rumble only, no DSX needed) - hence the new name
-[*]F11 in-game settings menu (mouse, keyboard or controller)
-[*]Heavier hoofbeats and drag in deep snow
-[*]Optional rumble in cutscenes
-[*]Startup notice when a new version is out
+[*]Source code is now on [url=https://github.com/Zyancalili/RDR2-DSX-Rumble]GitHub[/url] (BSD 2-Clause license)
+[*]The update notice now checks GitHub releases
 [/list]
 
 [size=4][b]Features[/b][/size]
@@ -53,5 +50,6 @@ Press [b]F11[/b] in game. Everything else is in [i]RDR2DSXRumble.ini[/i] (change
 
 [size=4][b]Credits[/b][/size]
 Alexander Blade (Script Hook RDR2), Paliverse (DSX), alloc8or (RDR3 native database)
+Source code: [url=https://github.com/Zyancalili/RDR2-DSX-Rumble]GitHub[/url] (BSD 2-Clause)
 
 [i]This mod is vibecoded: it was written with the help of AI (Claude).[/i]
