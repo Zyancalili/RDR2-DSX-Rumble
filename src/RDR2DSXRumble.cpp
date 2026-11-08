@@ -171,6 +171,9 @@ namespace N {
     constexpr uint64_t GET_ENTITY_HEIGHT_ABOVE_GROUND= 0x0D3B5BAEA08F63E9;
     constexpr uint64_t IS_ENTITY_ATTACHED            = 0xEE6AD63ABF59C0B7;
     constexpr uint64_t GET_RENDERING_CAM             = 0x03A8931ECC8015D6;
+    constexpr uint64_t IS_GAMEPLAY_CAM_RENDERING     = 0x8660EA714834E412;
+    constexpr uint64_t IS_CINEMATIC_CAM_RENDERING    = 0xBF7C780731AADBF8;
+    constexpr uint64_t IS_RADAR_HIDDEN               = 0x1B82FD5FFA4D666E;
     constexpr uint64_t IS_SCREEN_FADED_OUT           = 0xF5472C80DF2FF847;
     constexpr uint64_t IS_LOADING_SCREEN_VISIBLE     = 0xB54ADBE65D528FCB;
 }
@@ -960,6 +963,7 @@ struct State {
     int   meleeTarget = 0, meleeTargetHp = -1;
     std::vector<std::pair<int, int>> closePeds;   // peds within arm's reach + their last health
     float punchScanT = 0.f, sinceShot = 10.f;
+    bool  usingKeyboard = false;
     // cutscenes: peds nearby that might fire
     struct CinePed { int e; bool was; };
     std::vector<CinePed> cinePeds;
@@ -1356,21 +1360,33 @@ static void Tick(float dt) {
     bool pause    = Nat<int>(N::IS_PAUSE_MENU_ACTIVE) != 0;
     bool uiapp    = Nat<int>(N::IS_ANY_UIAPP_ACTIVE) != 0;
     bool ctrlOn   = Nat<int>(N::IS_PLAYER_CONTROL_ON, player) != 0;
-    // A cutscene: the player has no control and a scripted camera is rendering (menus like the map or
-    // journal don't use one). Faded-out screens and loading screens don't count.
-    int  cam      = ctrlOn || pause ? -1 : Nat<int>(N::GET_RENDERING_CAM);
-    bool scripted = !ctrlOn && !pause && cam != -1 && cam != 0;
+    // A cutscene: the player has no control and the normal gameplay camera isn't the one on screen
+    // (cutscene cameras replace it; the map, journal and catalogs draw over it). Faded-out and loading
+    // screens don't count.
+    int  cam = -1; bool gameCam = true, cineCam = false, radarHidden = false;
+    if (!ctrlOn && !pause) {
+        cam         = Nat<int>(N::GET_RENDERING_CAM);
+        gameCam     = Nat<int>(N::IS_GAMEPLAY_CAM_RENDERING) != 0;
+        cineCam     = Nat<int>(N::IS_CINEMATIC_CAM_RENDERING) != 0;
+        radarHidden = Nat<int>(N::IS_RADAR_HIDDEN) != 0;
+    }
+    bool scripted = !ctrlOn && !pause && ((cam != -1 && cam != 0) || !gameCam);
     bool cutscene = scripted && !Nat<int>(N::IS_SCREEN_FADED_OUT) && !Nat<int>(N::IS_LOADING_SCREEN_VISIBLE);
     bool menu     = pause || (uiapp && !ctrlOn && !scripted);
     g_scriptMenu  = menu;
     bool control  = ctrlOn && !menu;
-    bool keyboard = cfg.onlyWithController && Nat<int>(N::IS_USING_KEYBOARD, 0) != 0;
+    // keyboard or controller: only decided while you actually play. During cutscenes you don't touch the
+    // pad, and moving the mouse in the F11 menu must not make the game think you switched to keyboard.
+    if (control) S.usingKeyboard = Nat<int>(N::IS_USING_KEYBOARD, 0) != 0;
+    bool keyboard = cfg.onlyWithController && S.usingKeyboard;
     {
         static int lastState = -1;
-        int st = (pause ? 1 : 0) | (uiapp ? 2 : 0) | (ctrlOn ? 4 : 0) | (keyboard ? 8 : 0) | (cutscene ? 16 : 0);
+        int st = (pause ? 1 : 0) | (uiapp ? 2 : 0) | (ctrlOn ? 4 : 0) | (keyboard ? 8 : 0) | (cutscene ? 16 : 0)
+               | (gameCam ? 32 : 0) | (cineCam ? 64 : 0) | (radarHidden ? 128 : 0);
         if (st != lastState) {
-            Log("state: pause=%d uiapp=%d control=%d keyboard=%d cutscene=%d (cam %d) -> menu=%d", (int)pause, (int)uiapp,
-                (int)ctrlOn, (int)keyboard, (int)cutscene, cam, (int)menu);
+            Log("state: pause=%d uiapp=%d control=%d keyboard=%d cutscene=%d (cam %d, gameplayCam %d, cinematicCam %d, radarHidden %d) -> menu=%d",
+                (int)pause, (int)uiapp, (int)ctrlOn, (int)keyboard, (int)cutscene, cam, (int)gameCam, (int)cineCam,
+                (int)radarHidden, (int)menu);
             lastState = st;
         }
     }
