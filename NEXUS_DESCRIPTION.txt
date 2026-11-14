@@ -1,16 +1,16 @@
-[size=5][b]RDR2 Controller Rumble[/b][/size] - v1.6.1
+[b]First of all, if you find a bug and/or want something added please leave a comment and I will do that.[/b]
+
+[size=5][b]RDR2 Controller Rumble[/b][/size] - v1.6.2
 [i]Rumble that follows what happens in the game - for DualSense and Xbox controllers. (Formerly "RDR2 DSX Rumble".)[/i]
 
 [b]30+ rumble effects, each one fine-tuned by hand[/b] - plus [b]12 adaptive trigger profiles[/b] for the weapons on the DualSense.
 
 [b]DualSense users: [url=https://store.steampowered.com/app/1812620/DSX/]DSX[/url] is required.[/b] It's the best way to play: you also get adaptive triggers and the lightbar. Xbox controllers work without anything extra.
 
-[b]First of all, if you find a bug and/or want something added please leave a comment and I will do that.[/b]
-
-[size=4][b]What's new in v1.6.1[/b][/size]
+[size=4][b]What's new in v1.6.2[/b][/size]
 [list]
-[*]Source code is now on [url=https://github.com/Zyancalili/RDR2-DSX-Rumble]GitHub[/url] (BSD 2-Clause license)
-[*]The update notice now checks GitHub releases
+[*]Horse rumble at a walk can be turned off, so it only kicks in from a trot up (F11 > "Horse at a walk") - suggested by Madrok9
+[*]The update notice also works when GitHub is busy
 [/list]
 
 [size=4][b]Features[/b][/size]

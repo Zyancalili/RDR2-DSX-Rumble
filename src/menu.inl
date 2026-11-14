@@ -116,6 +116,7 @@ static MenuItem g_items[] = {
     {"Response curve",         "Rumble",  "ResponseCurve",      2, 15,  5, 40,  1},
     {"Footsteps",              "Rumble",  "Footsteps",          0, 100, 0, 200, 10},
     {"Horse",                  "Rumble",  "Horse",              0, 100, 0, 200, 10},
+    {"Horse at a walk",        "Rumble",  "HorseWalk",          1, 1},
     {"Guns",                   "Rumble",  "Weapons",            0, 100, 0, 200, 10},
     {"Fistfights",             "Rumble",  "Melee",              0, 100, 0, 200, 10},
     {"Rumble in cutscenes",    "General", "CutsceneRumble",     1, 1},
@@ -225,7 +226,8 @@ static void MenuValueText(const MenuItem& it, char* out, size_t n) {
 }
 
 // Layout (0..1 screen units)
-static constexpr float kPanelH = 0.86f, kPanelY = 0.07f, kRowH = 0.040f, kRowGap = 0.005f, kRowsY = 0.215f;
+static constexpr float kPanelY = 0.07f, kRowH = 0.040f, kRowGap = 0.005f, kRowsY = 0.215f;
+static constexpr float kPanelH = kRowsY - kPanelY + kItems * (kRowH + kRowGap) + 0.04f;   // grows with the item list
 
 static void MenuDraw(float cursorX, float cursorY) {
     using namespace UI;
@@ -363,36 +365,51 @@ static bool MenuFrame(float dt) {
 static std::atomic<int> g_updState{0};
 static char g_latest[16] = "";
 
+// GET https://host/path: the body, or "" when it fails (HTTP status in code, 0 = no answer).
+static std::string HttpGet(HINTERNET s, const wchar_t* host, const wchar_t* path, DWORD& code) {
+    std::string body; code = 0;
+    HINTERNET c = WinHttpConnect(s, host, INTERNET_DEFAULT_HTTPS_PORT, 0);
+    HINTERNET r = c ? WinHttpOpenRequest(c, L"GET", path, nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE) : nullptr;
+    if (r && WinHttpSendRequest(r, L"Accept: application/vnd.github+json\r\n", (DWORD)-1L, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) && WinHttpReceiveResponse(r, nullptr)) {
+        DWORD sz = sizeof code;
+        WinHttpQueryHeaders(r, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &code, &sz, WINHTTP_NO_HEADER_INDEX);
+        char buf[4096]; DWORD got = 0;
+        while (code == 200 && body.size() < 256 * 1024 && WinHttpReadData(r, buf, sizeof buf, &got) && got) body.append(buf, got);
+    }
+    if (r) WinHttpCloseHandle(r);
+    if (c) WinHttpCloseHandle(c);
+    return body;
+}
+
 static DWORD WINAPI UpdateThread(LPVOID) {
     int state = 3;
     HINTERNET s = WinHttpOpen(L"RDR2DSXRumble/" MOD_VERSION_W, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (s) {
         WinHttpSetTimeouts(s, 4000, 4000, 4000, 4000);
         // Latest GitHub release: {"...","tag_name":"v1.6.1",...}. The API wants a User-Agent (set by WinHttpOpen).
-        HINTERNET c = WinHttpConnect(s, UPDATE_HOST, INTERNET_DEFAULT_HTTPS_PORT, 0);
-        HINTERNET r = c ? WinHttpOpenRequest(c, L"GET", UPDATE_PATH, nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE) : nullptr;
-        if (r && WinHttpSendRequest(r, L"Accept: application/vnd.github+json\r\n", (DWORD)-1L, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) && WinHttpReceiveResponse(r, nullptr)) {
-            DWORD code = 0, sz = sizeof code;
-            WinHttpQueryHeaders(r, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &code, &sz, WINHTTP_NO_HEADER_INDEX);
-            std::string body; char buf[4096]; DWORD got = 0;
-            while (code == 200 && body.size() < 256 * 1024 && WinHttpReadData(r, buf, sizeof buf, &got) && got) body.append(buf, got);
-            size_t at = body.find("\"tag_name\"");
-            if (at != std::string::npos) at = body.find('"', body.find(':', at));   // opening quote of the value
-            if (at != std::string::npos) {
-                int maj = 0, min = 0, pat = 0;
-                const char* b = body.c_str() + at + 1; while (*b == 'v' || *b == 'V' || *b == ' ') b++;
-                if (sscanf(b, "%d.%d.%d", &maj, &min, &pat) >= 1) {
-                    if (pat > 0) snprintf(g_latest, sizeof g_latest, "%d.%d.%d", maj, min, pat);
-                    else         snprintf(g_latest, sizeof g_latest, "%d.%d", maj, min);
-                    long latest = maj * 1000000L + min * 1000L + pat;
-                    long mine   = MOD_VER_MAJOR * 1000000L + MOD_VER_MINOR * 1000L + MOD_VER_PATCH;
-                    state = latest > mine ? 2 : 1;
-                }
+        DWORD code = 0;
+        const char* from = "release";
+        std::string body = HttpGet(s, UPDATE_HOST, UPDATE_PATH, code);
+        size_t at = body.find("\"tag_name\"");
+        if (at != std::string::npos) at = body.find('"', body.find(':', at));   // opening quote of the value
+        const char* b = at != std::string::npos ? body.c_str() + at + 1 : nullptr;
+        if (!b) {   // API limit hit or GitHub down: version.txt holds the same number ("1.6.1")
+            from = "version.txt";
+            body = HttpGet(s, UPDATE_TXT_HOST, UPDATE_TXT_PATH, code);
+            if (!body.empty()) b = body.c_str();
+        }
+        if (b) {
+            int maj = 0, min = 0, pat = 0;
+            while (*b == 'v' || *b == 'V' || *b == ' ') b++;
+            if (sscanf(b, "%d.%d.%d", &maj, &min, &pat) >= 1) {
+                if (pat > 0) snprintf(g_latest, sizeof g_latest, "%d.%d.%d", maj, min, pat);
+                else         snprintf(g_latest, sizeof g_latest, "%d.%d", maj, min);
+                long latest = maj * 1000000L + min * 1000L + pat;
+                long mine   = MOD_VER_MAJOR * 1000000L + MOD_VER_MINOR * 1000L + MOD_VER_PATCH;
+                state = latest > mine ? 2 : 1;
             }
-            Log("update check: HTTP %lu, latest '%s' -> %s", code, g_latest, state == 1 ? "up to date" : state == 2 ? "update available" : "unknown");
-        } else Log("update check failed (%lu)", GetLastError());
-        if (r) WinHttpCloseHandle(r);
-        if (c) WinHttpCloseHandle(c);
+        }
+        Log("update check (%s): HTTP %lu, latest '%s' -> %s", from, code, g_latest, state == 1 ? "up to date" : state == 2 ? "update available" : "unknown");
         WinHttpCloseHandle(s);
     }
     g_updState = state;

@@ -1,6 +1,7 @@
-# Renders the Nexus media for RDR2 Controller Rumble into .\media
-#   powershell -ExecutionPolicy Bypass -File tools_media.ps1 -version v1.6
-param([string]$version = 'v1.6')
+# Renders the Nexus media for RDR2 Controller Rumble into .\media, stamped with MOD_VERSION from the source
+#   powershell -ExecutionPolicy Bypass -File tools_media.ps1
+$version = [regex]::Match((Get-Content (Join-Path $PSScriptRoot 'src\RDR2DSXRumble.cpp') -Raw), '#define MOD_VERSION "(v[\d.]+)"').Groups[1].Value
+if (-not $version) { throw 'MOD_VERSION not found in src\RDR2DSXRumble.cpp' }
 Add-Type -AssemblyName System.Drawing
 $out = Join-Path $PSScriptRoot 'media'
 New-Item -ItemType Directory -Force $out | Out-Null

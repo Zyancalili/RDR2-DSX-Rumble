@@ -69,15 +69,17 @@ static fnNativePush64     shPush;
 static fnNativeCall       shCall;
 static HMODULE            g_module;
 // Versions: 1.6 -> 1.7 for a new version, 1.6 -> 1.6.1 -> 1.6.2 for bug fixes and small features
-#define MOD_VERSION "v1.6.1"
-#define MOD_VERSION_W L"1.6.1"
+#define MOD_VERSION "v1.6.2"
+#define MOD_VERSION_W L"1.6.2"
 #define MOD_VER_MAJOR 1
 #define MOD_VER_MINOR 6
-#define MOD_VER_PATCH 1
+#define MOD_VER_PATCH 2
 // Update check: the tag of the latest GitHub release (tags look like v1.6 / v1.6.1).
-// (v1.6 and older read version.txt in the repo instead - keep that file in step for them.)
 #define UPDATE_HOST L"api.github.com"
 #define UPDATE_PATH L"/repos/Zyancalili/RDR2-DSX-Rumble/releases/latest"
+// Fallback when the API says no (it allows 60 requests an hour per IP). v1.6 and older read only this file.
+#define UPDATE_TXT_HOST L"raw.githubusercontent.com"
+#define UPDATE_TXT_PATH L"/Zyancalili/RDR2-DSX-Rumble/main/version.txt"
 typedef int (*fnWorldGetAll)(int* arr, int size);
 static fnWorldGetAll      shAllPeds, shAllObjects;
 
@@ -228,6 +230,7 @@ struct Config {
     float intensity = 1.0f;
     float curve = 2.0f;
     float footsteps = 1.0f, horse = 1.0f, weapons = 1.0f, reload = 1.0f, damage = 1.0f, weaponSwitch = 1.0f;
+    bool  horseWalk = true;       // hoofbeats at a walk too (false = only from a trot up)
     float melee = 1.0f, water = 1.0f, swimming = 1.0f;
     float animals = 1.0f, doors = 1.0f, carry = 1.0f, sliding = 1.0f;
     bool  muteUnfocused = true;
@@ -269,6 +272,7 @@ static void LoadConfig() {
     c.curve      = std::clamp(IniF("Rumble", "ResponseCurve", 2.0f), 0.5f, 4.f);
     c.footsteps  = IniF("Rumble", "Footsteps", 100) / 100.f;
     c.horse      = IniF("Rumble", "Horse", 100) / 100.f;
+    c.horseWalk  = IniI("Rumble", "HorseWalk", 1) != 0;
     c.weapons    = IniF("Rumble", "Weapons", 100) / 100.f;
     c.reload     = IniF("Rumble", "Reload", 100) / 100.f;
     c.weaponSwitch = IniF("Rumble", "WeaponSwitch", 100) / 100.f;
@@ -1052,15 +1056,16 @@ static void ScanSnow(int mount, float dt) {
 
 // Hoofbeat pattern per gait. Offsets are fractions of one stride.
 static void HorseRumble(float speed, float dt) {
-    if (speed < 0.6f) { S.hoofPhase = 0; S.hoofIdx = 0; return; }
+    constexpr float kTrot = 2.6f;   // speed where the walk turns into a trot
+    if (speed < (cfg.horseWalk ? 0.6f : kTrot)) { S.hoofPhase = 0; S.hoofIdx = 0; return; }
     static const float walk[]   = {0.f, 0.25f, 0.5f, 0.75f};
     static const float trot[]   = {0.f, 0.5f};
     static const float canter[] = {0.f, 0.16f, 0.30f};
     static const float gallop[] = {0.f, 0.09f, 0.18f, 0.27f};
     const float* pat; int n; float stride, amp, dur;
     // A 500 kg animal: hoofbeats are dull thuds through the saddle - above footsteps, below gunfire.
-    if (speed < 2.6f)      { pat = walk;   n = 4; stride = 1.15f - speed * 0.08f; amp = 0.20f; dur = 0.040f; }
-    else if (speed < 5.2f) { pat = trot;   n = 2; stride = 0.80f - (speed - 2.6f) * 0.03f; amp = 0.28f; dur = 0.045f; }
+    if (speed < kTrot)     { pat = walk;   n = 4; stride = 1.15f - speed * 0.08f; amp = 0.20f; dur = 0.040f; }
+    else if (speed < 5.2f) { pat = trot;   n = 2; stride = 0.80f - (speed - kTrot) * 0.03f; amp = 0.28f; dur = 0.045f; }
     else if (speed < 8.5f) { pat = canter; n = 3; stride = 0.66f - (speed - 5.2f) * 0.02f; amp = 0.34f; dur = 0.048f; }
     else                   { pat = gallop; n = 4; stride = std::max(0.42f, 0.56f - (speed - 8.5f) * 0.02f); amp = 0.40f; dur = 0.045f; }
 
