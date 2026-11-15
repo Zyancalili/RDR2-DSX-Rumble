@@ -9,7 +9,7 @@
 
 [size=4][b]What's new in v1.6.3[/b][/size]
 [list]
-[*]Horse rumble can be turned on or off for each gait: walk, trot, canter and gallop (F11 > "Horse at a ...")
+[*]Horse rumble has its own dropdown in F11: switch all of it off at once, or open it to set the strength and turn each gait (walk, trot, canter, gallop) on or off
 [/list]
 
 [size=4][b]Features[/b][/size]

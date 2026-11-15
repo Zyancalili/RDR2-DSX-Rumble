@@ -271,7 +271,7 @@ static void LoadConfig() {
     c.intensity  = IniF("Rumble", "Intensity", 100) / 100.f;
     c.curve      = std::clamp(IniF("Rumble", "ResponseCurve", 2.0f), 0.5f, 4.f);
     c.footsteps  = IniF("Rumble", "Footsteps", 100) / 100.f;
-    c.horse      = IniF("Rumble", "Horse", 100) / 100.f;
+    c.horse      = IniI("Rumble", "HorseRumble", 1) ? IniF("Rumble", "Horse", 100) / 100.f : 0.f;   // HorseRumble=0 mutes all horse rumble
     c.horseWalk  = IniI("Rumble", "HorseWalk", 1) != 0;
     c.horseTrot  = IniI("Rumble", "HorseTrot", 1) != 0;
     c.horseCanter = IniI("Rumble", "HorseCanter", 1) != 0;

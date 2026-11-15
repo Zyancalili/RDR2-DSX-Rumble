@@ -106,8 +106,8 @@ namespace UI {
 struct MenuItem {
     const char* label;
     const char* sec; const char* key;
-    int kind;                  // 0 = percent slider, 1 = toggle, 2 = curve (x10), 3 = action
-    int def, min, max, step;
+    int kind;                  // 0 = percent slider, 1 = toggle, 2 = curve (x10), 3 = action, 4 = toggle + dropdown
+    int def, min, max, step;   // kind 4: step = how many rows below belong to its dropdown
     int val;
 };
 
@@ -115,11 +115,12 @@ static MenuItem g_items[] = {
     {"Rumble strength",        "Rumble",  "Intensity",          0, 100, 0, 200, 10},
     {"Response curve",         "Rumble",  "ResponseCurve",      2, 15,  5, 40,  1},
     {"Footsteps",              "Rumble",  "Footsteps",          0, 100, 0, 200, 10},
-    {"Horse",                  "Rumble",  "Horse",              0, 100, 0, 200, 10},
-    {"Horse at a walk",        "Rumble",  "HorseWalk",          1, 1},
-    {"Horse at a trot",        "Rumble",  "HorseTrot",          1, 1},
-    {"Horse at a canter",      "Rumble",  "HorseCanter",        1, 1},
-    {"Horse at a gallop",      "Rumble",  "HorseGallop",        1, 1},
+    {"Horse",                  "Rumble",  "HorseRumble",        4, 1,   0, 0,   5},
+    {"Strength",               "Rumble",  "Horse",              0, 100, 0, 200, 10},
+    {"At a walk",              "Rumble",  "HorseWalk",          1, 1},
+    {"At a trot",              "Rumble",  "HorseTrot",          1, 1},
+    {"At a canter",            "Rumble",  "HorseCanter",        1, 1},
+    {"At a gallop",            "Rumble",  "HorseGallop",        1, 1},
     {"Guns",                   "Rumble",  "Weapons",            0, 100, 0, 200, 10},
     {"Fistfights",             "Rumble",  "Melee",              0, 100, 0, 200, 10},
     {"Rumble in cutscenes",    "General", "CutsceneRumble",     1, 1},
@@ -136,6 +137,7 @@ constexpr int kItems = sizeof g_items / sizeof g_items[0];
 
 static struct {
     bool  open = false, paused = false;
+    bool  expanded = false;           // shortcut: one flag for all dropdowns, fine while "Horse" is the only one
     int   sel = 0, hover = -1;
     float anim = 0.f;
     uint32_t prevPad = 0;
@@ -143,6 +145,15 @@ static struct {
     bool  prevLmb = false;
     DWORD lastNativeClick = 0;
 } M;
+
+// Dropdown row that row i sits in, or -1
+static int GroupOf(int i) {
+    for (int j = 0; j < i; j++)
+        if (g_items[j].kind == 4 && i <= j + g_items[j].step) return j;
+    return -1;
+}
+static bool Hidden(int i) { return !M.expanded && GroupOf(i) >= 0; }
+static void MenuMove(int d) { do M.sel = (M.sel + d + kItems) % kItems; while (Hidden(M.sel)); }
 
 static bool KeyEdge(int vk) {
     bool down = (GetAsyncKeyState(vk) & 0x8000) != 0;
@@ -155,7 +166,7 @@ static void MenuLoadValues() {
     for (auto& it : g_items) {
         if (!it.sec) continue;
         if (it.kind == 2) it.val = (int)(IniF(it.sec, it.key, it.def / 10.f) * 10.f + 0.5f);
-        else              it.val = it.kind == 1 ? (IniI(it.sec, it.key, it.def) != 0) : (int)(IniF(it.sec, it.key, (float)it.def) + 0.5f);
+        else              it.val = it.kind == 1 || it.kind == 4 ? (IniI(it.sec, it.key, it.def) != 0) : (int)(IniF(it.sec, it.key, (float)it.def) + 0.5f);
     }
 }
 
@@ -208,6 +219,10 @@ static void MenuChange(int i, int dir) {
             int nv = std::clamp(it.val + dir * it.step, it.min, it.max);
             if (nv != it.val) { it.val = nv; MenuSave(it); }
             break; }
+        case 4:   // activate = open / close the dropdown, left / right = on / off
+            if (dir == 0) M.expanded = !M.expanded;
+            else { it.val = !it.val; MenuSave(it); }
+            break;
         case 3:
             if (dir != 0) return;
             if (!strcmp(it.label, "Close")) MenuClose();
@@ -222,20 +237,24 @@ static void MenuChange(int i, int dir) {
 static void MenuValueText(const MenuItem& it, char* out, size_t n) {
     switch (it.kind) {
         case 0: snprintf(out, n, "%d%%", it.val); break;
-        case 1: snprintf(out, n, "%s", it.val ? "On" : "Off"); break;
+        case 1: case 4: snprintf(out, n, "%s", it.val ? "On" : "Off"); break;
         case 2: snprintf(out, n, "%.1f", it.val / 10.f); break;
         default: out[0] = 0;
     }
 }
 
 // Layout (0..1 screen units)
-static constexpr float kPanelY = 0.04f, kRowH = 0.034f, kRowGap = 0.004f, kRowsY = 0.185f;   // 19 rows fit on screen
-static constexpr float kPanelH = kRowsY - kPanelY + kItems * (kRowH + kRowGap) + 0.04f;   // grows with the item list
+static constexpr float kPanelY = 0.04f, kRowsY = 0.185f;
+// Rows shrink when the dropdown is open, so the panel always ends above 0.95.
+static int   VisibleRows() { int n = 0; for (int i = 0; i < kItems; i++) n += !Hidden(i); return n; }
+static float RowStep()     { return std::min(0.045f, 0.725f / VisibleRows()); }
 
 static void MenuDraw(float cursorX, float cursorY) {
     using namespace UI;
     float pw = 0.52f / aspect * (16.f / 9.f) * 0.75f;      // ~0.39 of the width on 16:9
     float px = 0.5f - pw * 0.5f, py = kPanelY;
+    const float step = RowStep(), kRowH = step * 0.89f;
+    const float kPanelH = kRowsY - kPanelY + VisibleRows() * step + 0.04f;
     Rect(0, 0, 1, 1, 0, 0, 0, (int)(110 * M.anim));         // dim the game behind
     Backdrop(px, py, pw, kPanelH, 0.74f, 0.075f, true);
     Rect(px, py, pw, 0.003f, 245, 230, 200, 120);
@@ -246,11 +265,13 @@ static void MenuDraw(float cursorX, float cursorY) {
     Text("Settings  -  " MOD_VERSION, 0.5f, py + 0.112f, 22, "body", Center, 215, 185, 150);
 
     float rx = px + pw * 0.06f, rw = pw * 0.88f;
+    int row = 0;
     for (int i = 0; i < kItems; i++) {
+        if (Hidden(i)) continue;
         const MenuItem& it = g_items[i];
-        float y = kRowsY + i * (kRowH + kRowGap);
-        bool sel = i == M.sel;
-        Rect(rx, y, rw, kRowH, 15, 5, 3, sel ? 215 : 150);
+        float y = kRowsY + row++ * step;
+        bool sel = i == M.sel, child = GroupOf(i) >= 0;
+        Rect(rx, y, rw, kRowH, 15, 5, 3, sel ? 215 : child ? 110 : 150);
         if (sel) {
             Rect(rx, y, 0.004f, kRowH, 250, 175, 80, 255);
             Rect(rx, y, rw, 0.002f, 250, 175, 80, 160);
@@ -259,10 +280,19 @@ static void MenuDraw(float cursorX, float cursorY) {
         int tr = sel ? 250 : 245, tg = sel ? 175 : 230, tb = sel ? 80 : 200;
         float ty = y + kRowH * 0.5f - 0.011f;
         if (it.kind == 3) { Text(it.label, 0.5f, ty, 22, "body", Center, tr, tg, tb); continue; }
-        Text(it.label, rx + 0.012f, ty, 22, "body", Left, tr, tg, tb);
+        float lx = rx + (child ? 0.030f : 0.012f);
+        if (it.kind == 4) {   // pixel arrow: > closed, v open
+            float ax = rx + 0.012f, ay = y + kRowH * 0.5f, u = 0.0028f;
+            for (int k = 0; k < 4; k++) {
+                if (M.expanded) Rect(ax + k * u * 0.6f, ay - u * 1.5f + k * u, (7 - 2 * k) * u * 0.6f, u, tr, tg, tb, 255);
+                else            Rect(ax + k * u * 0.6f, ay - (3.5f - k) * u, u * 0.6f, (7 - 2 * k) * u, tr, tg, tb, 255);
+            }
+            lx = rx + 0.030f;
+        }
+        Text(it.label, lx, ty, 22, "body", Left, tr, tg, tb);
         char v[32]; MenuValueText(it, v, sizeof v);
         float vr = rx + rw - 0.012f;
-        if (it.kind == 1) {
+        if (it.kind == 1 || it.kind == 4) {
             Text(v, vr, ty, 22, "body", Right, it.val ? 250 : 160, it.val ? 175 : 140, it.val ? 80 : 120);
         } else {   // -  value  +
             float vc = rx + rw * 0.82f;
@@ -271,7 +301,7 @@ static void MenuDraw(float cursorX, float cursorY) {
             Text("+", rx + rw * 0.96f, ty, 24, "body", Center, 245, 230, 200, 200);
         }
     }
-    float fy = kRowsY + kItems * (kRowH + kRowGap) + 0.006f;
+    float fy = kRowsY + row * step + 0.006f;
     Text("Mouse: click, wheel   -   Pad: D-pad, Cross, Circle   -   F11 / Esc: close", 0.5f, fy, 16, "body", Center, 215, 185, 150, 220);
     (void)cursorX; (void)cursorY;
 }
@@ -283,11 +313,15 @@ static int MenuHit(float cx, float cy, int& zone) {
     float px = 0.5f - pw * 0.5f, rx = px + pw * 0.06f, rw = pw * 0.88f;
     zone = 0;
     if (cx < rx || cx > rx + rw) return -1;
+    const float step = RowStep(), kRowH = step * 0.89f;
+    int row = 0;
     for (int i = 0; i < kItems; i++) {
-        float y = kRowsY + i * (kRowH + kRowGap);
+        if (Hidden(i)) continue;
+        float y = kRowsY + row++ * step;
         if (cy >= y && cy <= y + kRowH) {
             float f = (cx - rx) / rw;
             if (g_items[i].kind == 0 || g_items[i].kind == 2) zone = f > 0.82f ? 1 : f > 0.62f ? -1 : 0;
+            if (g_items[i].kind == 4) zone = f > 0.62f ? 1 : 0;   // label opens the dropdown, the value switches on / off
             return i;
         }
     }
@@ -312,8 +346,8 @@ static bool MenuFrame(float dt) {
     // --- keyboard ---
     if (focused) {
         if (KeyEdge(VK_ESCAPE) || KeyEdge(VK_BACK)) { MenuClose(); return false; }
-        if (KeyEdge(VK_UP))     M.sel = (M.sel + kItems - 1) % kItems;
-        if (KeyEdge(VK_DOWN))   M.sel = (M.sel + 1) % kItems;
+        if (KeyEdge(VK_UP))     MenuMove(-1);
+        if (KeyEdge(VK_DOWN))   MenuMove(+1);
         if (KeyEdge(VK_LEFT))   MenuChange(M.sel, -1);
         if (KeyEdge(VK_RIGHT))  MenuChange(M.sel, +1);
         if (KeyEdge(VK_RETURN)) MenuChange(M.sel, 0);
@@ -323,8 +357,8 @@ static bool MenuFrame(float dt) {
     uint32_t pad = g_padButtons.load(), pressed = pad & ~M.prevPad;
     M.prevPad = pad;
     if (pressed & B_CIRCLE) { MenuClose(); return false; }
-    if (pressed & B_UP)     M.sel = (M.sel + kItems - 1) % kItems;
-    if (pressed & B_DOWN)   M.sel = (M.sel + 1) % kItems;
+    if (pressed & B_UP)     MenuMove(-1);
+    if (pressed & B_DOWN)   MenuMove(+1);
     if (pressed & B_LEFT)   MenuChange(M.sel, -1);
     if (pressed & B_RIGHT)  MenuChange(M.sel, +1);
     if (pressed & B_CROSS)  MenuChange(M.sel, 0);
