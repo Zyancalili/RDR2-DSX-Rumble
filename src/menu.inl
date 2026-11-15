@@ -117,6 +117,9 @@ static MenuItem g_items[] = {
     {"Footsteps",              "Rumble",  "Footsteps",          0, 100, 0, 200, 10},
     {"Horse",                  "Rumble",  "Horse",              0, 100, 0, 200, 10},
     {"Horse at a walk",        "Rumble",  "HorseWalk",          1, 1},
+    {"Horse at a trot",        "Rumble",  "HorseTrot",          1, 1},
+    {"Horse at a canter",      "Rumble",  "HorseCanter",        1, 1},
+    {"Horse at a gallop",      "Rumble",  "HorseGallop",        1, 1},
     {"Guns",                   "Rumble",  "Weapons",            0, 100, 0, 200, 10},
     {"Fistfights",             "Rumble",  "Melee",              0, 100, 0, 200, 10},
     {"Rumble in cutscenes",    "General", "CutsceneRumble",     1, 1},
@@ -226,7 +229,7 @@ static void MenuValueText(const MenuItem& it, char* out, size_t n) {
 }
 
 // Layout (0..1 screen units)
-static constexpr float kPanelY = 0.07f, kRowH = 0.040f, kRowGap = 0.005f, kRowsY = 0.215f;
+static constexpr float kPanelY = 0.04f, kRowH = 0.034f, kRowGap = 0.004f, kRowsY = 0.185f;   // 19 rows fit on screen
 static constexpr float kPanelH = kRowsY - kPanelY + kItems * (kRowH + kRowGap) + 0.04f;   // grows with the item list
 
 static void MenuDraw(float cursorX, float cursorY) {
