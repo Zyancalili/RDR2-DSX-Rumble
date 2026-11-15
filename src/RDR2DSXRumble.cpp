@@ -940,10 +940,10 @@ static DWORD WINAPI PadThread(LPVOID) {
             }
             o.ledSetup = Pad::fresh && Pad::isBT;
             bool changed = Pad::fresh || memcmp(&o, &sent, sizeof o) != 0;
-            bool keep = focused && cfg.enabled && (o.trig || o.light) && now - lastDs > 2000;   // Steam Input may have written its own state
             bool refresh = active && now - lastWrite > 60;
             if (!(o.motors || o.trig || o.light || o.ledSetup)) sent = o;                       // nothing of ours to say
-            else if ((changed || keep || refresh) && now - lastDs >= (Pad::isBT ? 20u : 10u) && Pad::WriteDS(o)) {
+            // no periodic resend: rewriting the full state every 2 s made the game stutter every 2 s (2026-11-15)
+            else if ((changed || refresh) && now - lastDs >= (Pad::isBT ? 20u : 10u) && Pad::WriteDS(o)) {
                 sent = o; lastDs = lastWrite = now; lastS = S; lastW = W; Pad::fresh = false;
                 if (cfg.debug) {
                     static uint64_t lastLog = 0; static int unlogged = 0;
@@ -952,7 +952,7 @@ static DWORD WINAPI PadThread(LPVOID) {
                         Log("DS <- motors %s%d/%d | L2 %s%02X %02X %02X %02X %02X | R2 %02X %02X %02X %02X %02X | rgb %s%d,%d,%d%s (+%d writes not logged)",
                             o.motors ? "" : "(not sent) ", o.strong, o.weak, o.trig ? "" : "(not sent) ", o.l2[0], o.l2[1], o.l2[2], o.l2[3], o.l2[4],
                             o.r2[0], o.r2[1], o.r2[2], o.r2[3], o.r2[4], o.light ? "" : "(not sent) ", o.rgb[0], o.rgb[1], o.rgb[2],
-                            keep && !changed ? " [re-assert]" : "", unlogged);
+                            "", unlogged);
                         lastLog = now; unlogged = 0;
                     }
                 }

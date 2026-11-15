@@ -10,7 +10,7 @@ An optional file for DualSense owners who don't want DSX. The mod talks to the c
 [list]
 [*][b]Steam Input ON[/b] for RDR2 and [b]DSX closed[/b]
 [*][b]PlayStation buttons:[/b] install Lenny's Mod Loader and copy the [i]lml[/i] folder from the zip into the game folder. The icons are the game's own PS4 art. Without the loader everything else works, the buttons stay Xbox
-[*]Switch between DSX and no DSX in F11 ("DualSense without DSX"), and open or close DSX to match
+[*]Want DSX instead? Use the main file; this edition never talks to DSX
 [/list]
 
 === Installation (same file) ===
