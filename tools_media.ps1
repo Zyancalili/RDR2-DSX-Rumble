@@ -130,7 +130,7 @@ Grid 'Rumble that makes sense' 'Every effect is tuned to how it would feel - sna
     @('Water and swimming', 'Rivers push against you; wading grows with your pace. Rhythmic swim strokes.'),
     @('World and cutscenes', 'Doors, carrying bodies, eating and looting, falls, wagons. Cutscene gunfights.'),
     @('F11 settings menu', 'Tune it in game. Advanced tabs switch every effect on or off.'),
-    @('Lightbar and health', 'Lightbar green in nature, orange in town and desert, red in fights. A heartbeat when low.')
+    @('Lightbar and health', 'Lightbar: green in nature, white in snow, orange in town and desert, red in fights.')
 ) '2_rumble.png'
 
 # ---------------------------------------------------------------------------- 4. adaptive triggers chart

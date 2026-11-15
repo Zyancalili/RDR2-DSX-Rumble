@@ -1030,7 +1030,7 @@ struct State {
     int   rgb[3] = {-1, -1, -1};
     float lb[3] = {230.f, 10.f, 10.f};       // lightbar colour easing towards its target (starts red, like the start screen)
     float fightT = 0.f, fightScanT = 0.f;    // > 0: in a fight
-    float regionT = 0.f; int region = 0;     // 0 = nature, 1 = Saint Denis, 2 = desert
+    float regionT = 0.f, snowSeenT = 0.f; int region = 0;   // 0 = nature, 1 = Saint Denis, 2 = desert, 3 = snow
     bool  wasUsing = false; uint32_t useState = 0; int lootTarget = 0; float itemCd = 0.f;
     DWORD lastDsx = 0;
 } S;
@@ -1410,14 +1410,18 @@ static void Landing(float& minVz, float vz, float scale) {
     }
 }
 
-// Where you are, for the lightbar: 0 = nature, 1 = Saint Denis, 2 = the desert.
+// Where you are, for the lightbar: 0 = nature, 1 = Saint Denis, 2 = the desert, 3 = snow.
 // shortcut: hand-picked map boxes, not the game's zones; switch to zone hashes once the debug log shows them.
 static int Region(int ped, float dt) {
     S.regionT -= dt;
     if (S.regionT > 0.f) return S.region;
     S.regionT = 1.f;
     Vec3 p = Nat<Vec3>(N::GET_ENTITY_COORDS, ped, true, true);
-    int r = (p.x > 2250.f && p.x < 3000.f && p.y > -1700.f && p.y < -900.f) ? 1      // Saint Denis
+    float gz = 0.f; uint32_t mat = 0; int fl = 0;   // snow on the ground under you (held 5 s: patchy snow must not flicker)
+    bool snow = Nat<int>(N::GET_GROUND_Z_AND_MATERIAL, p.x, p.y, p.z + 1.0f, 17, &gz, &mat, &fl) && SnowDepthOf(mat) > 0.f;
+    S.snowSeenT = snow ? 5.f : S.snowSeenT - 1.f;
+    int r = S.snowSeenT > 0.f ? 3
+          : (p.x > 2250.f && p.x < 3000.f && p.y > -1700.f && p.y < -900.f) ? 1      // Saint Denis
           : (p.x < -3050.f && p.y < -1500.f)                                 ? 2      // Cholla Springs, Gaptooth Ridge, Rio Bravo
           : 0;
     if (cfg.debug && r != S.region)
@@ -1815,7 +1819,7 @@ static void Tick(float dt) {
 
     if (cfg.lightbar) {
         // red in fights (pulsing when low on health) and on loading screens; otherwise the land you are in
-        static const float region[3][3] = { {60, 200, 90}, {255, 170, 90}, {255, 85, 10} };   // nature, Saint Denis, desert
+        static const float region[4][3] = { {0, 150, 25}, {255, 170, 90}, {255, 85, 10}, {235, 245, 255} };   // nature, Saint Denis, desert, snow
         bool fight = S.fightT > 0.f, loading = Nat<int>(N::IS_LOADING_SCREEN_VISIBLE) != 0;
         const float* to = fight || loading ? nullptr : region[Region(ped, dt)];
         float red[3] = {230, 10, 10};

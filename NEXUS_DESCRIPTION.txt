@@ -9,7 +9,7 @@
 
 [size=4][b]What's new in v1.7.0[/b][/size]
 [list]
-[*][b]Lightbar by place:[/b] red on the start screen and in fights (pulsing when you are low on health), a calm green in nature, light orange in Saint Denis, deep orange in the desert
+[*][b]Lightbar by place:[/b] red on the start screen and in fights (pulsing when you are low on health), a deep green in nature, white in the snow, light orange in Saint Denis, deep orange in the desert
 [*][b]Eating and items:[/b] a soft rumble when you eat, drink, take a tonic, pick something up or loot
 [*][b]New Advanced settings in F11:[/b] three tabs, every effect as its own title card with pixel art - switch each one on or off
 [*][b]Horse dropdown in F11:[/b] all horse rumble on/off, its strength, and each gait (walk, trot, canter, gallop) on its own
