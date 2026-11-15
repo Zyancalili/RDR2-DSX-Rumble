@@ -69,11 +69,11 @@ static fnNativePush64     shPush;
 static fnNativeCall       shCall;
 static HMODULE            g_module;
 // Versions: 1.6 -> 1.7 for a new version, 1.6 -> 1.6.1 -> 1.6.2 for bug fixes and small features
-#define MOD_VERSION "v1.7.1"
-#define MOD_VERSION_W L"1.7.1"
+#define MOD_VERSION "v1.8.0"
+#define MOD_VERSION_W L"1.8.0"
 #define MOD_VER_MAJOR 1
-#define MOD_VER_MINOR 7
-#define MOD_VER_PATCH 1
+#define MOD_VER_MINOR 8
+#define MOD_VER_PATCH 0
 // Update check: the tag of the latest GitHub release (tags look like v1.6 / v1.6.1).
 #define UPDATE_HOST L"api.github.com"
 #define UPDATE_PATH L"/repos/Zyancalili/RDR2-DSX-Rumble/releases/latest"
