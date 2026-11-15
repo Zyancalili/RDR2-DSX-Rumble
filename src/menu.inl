@@ -246,7 +246,7 @@ static MenuItem g_items[] = {
     {"Rumble in cutscenes",    "General", "CutsceneRumble",     1, 1},
     {"Adaptive triggers",      "DSX",     "AdaptiveTriggers",   1, 1},
     {"Lightbar",               "DSX",     "Lightbar",           1, 1},
-    {"DualSense without DSX",  "DSX",     "DirectDualSense",    1, 0},
+    {"DualSense without DSX",  "DSX",     "DirectDualSense",    1, 1},
     {"Menu clicks",            "Menu",    "ButtonRumble",       1, 1},
     {"Mute when alt-tabbed",   "General", "MuteWhenUnfocused",  1, 1},
     {"Check for updates",      "General", "CheckForUpdates",    1, 1},

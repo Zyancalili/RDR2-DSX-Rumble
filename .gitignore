@@ -10,3 +10,5 @@
 /3.png
 /menu_preview_*.png
 /ps_textures/
+# DualSense Native zips carry a file built from the game's own gamepad_icons_pc.gfx
+/releases/*DualSenseNative*

@@ -248,7 +248,7 @@ struct Config {
     float landing = 1.0f, vehicle = 1.0f, heartbeat = 1.0f;
     float lowHealth = 0.20f;
     bool  dsx = true, triggers = true, lightbar = true, gallopTriggers = true;
-    bool  direct = false;          // DualSense without DSX: triggers, lightbar and rumble written straight to the pad
+    bool  direct = true;           // DualSense without DSX: triggers, lightbar and rumble written straight to the pad
     bool  fireAtBreak = true;
     float breakAdjust = 0.f;      // fraction of trigger travel added to the break point
     int   dsxPort = 0;            // 0 = auto
@@ -323,7 +323,7 @@ static void LoadConfig() {
     c.fireAtBreak     = IniI("DSX", "FireAtBreakPoint", 0) != 0;
     c.breakAdjust     = std::clamp(IniF("DSX", "BreakPointAdjust", 0), -30.f, 30.f) / 100.f;
     c.lightbar        = IniI("DSX", "Lightbar", 1) != 0;
-    c.direct          = IniI("DSX", "DirectDualSense", 0) != 0;
+    c.direct          = IniI("DSX", "DirectDualSense", 1) != 0;   // DualSense Native edition: on by default
     cfg = c;
 }
 

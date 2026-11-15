@@ -1,0 +1,22 @@
+=== File name (Nexus "Files" tab, optional file) ===
+DualSense Native (no DSX) - v1.8.0
+
+=== File description (Nexus file upload form) ===
+DualSense without DSX: rumble, adaptive triggers and lightbar go straight to the controller. Steam Input ON, DSX closed. PlayStation buttons with Lenny's Mod Loader. Experimental.
+
+=== Section for the main description (insert after "Requirements") ===
+[size=4][b]DualSense Native (no DSX) - experimental[/b][/size]
+An optional file for DualSense owners who don't want DSX. The mod talks to the controller itself: same rumble effects, adaptive triggers and lightbar.
+[list]
+[*][b]Steam Input ON[/b] for RDR2 and [b]DSX closed[/b]
+[*][b]PlayStation buttons:[/b] install Lenny's Mod Loader and copy the [i]lml[/i] folder from the zip into the game folder. The icons are the game's own PS4 art. Without the loader everything else works, the buttons stay Xbox
+[*]Switch between DSX and no DSX in F11 ("DualSense without DSX"), and open or close DSX to match
+[/list]
+
+=== Installation (same file) ===
+[list=1]
+[*]Install Script Hook RDR2.
+[*]Copy [i]RDR2DSXRumble.asi[/i] and [i]RDR2DSXRumble.ini[/i] into the game folder (next to [i]RDR2.exe[/i]).
+[*]Optional, for PlayStation buttons: install Lenny's Mod Loader, then copy the [i]lml[/i] folder from the zip into the game folder.
+[*]Steam: RDR2 > Properties > Controller > Steam Input [b]ON[/b]. Close DSX.
+[/list]
