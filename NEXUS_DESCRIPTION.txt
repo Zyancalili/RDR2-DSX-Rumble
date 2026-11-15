@@ -1,20 +1,31 @@
 [b]First of all, if you find a bug and/or want something added please leave a comment and I will do that.[/b]
 
 [size=5][b]RDR2 Controller Rumble[/b][/size] - v1.8.0
-[i]Rumble that follows what happens in the game - for DualSense and Xbox controllers. (Formerly "RDR2 DSX Rumble".)[/i]
+[i]Rumble that follows what happens in the game, for DualSense and Xbox controllers. (Formerly "RDR2 DSX Rumble".)[/i]
 
-[b]30+ rumble effects, each one fine-tuned by hand[/b] - plus [b]12 adaptive trigger profiles[/b] for the weapons on the DualSense.
+[b]30+ rumble effects[/b], each one tuned by hand, plus [b]12 adaptive trigger profiles[/b] for the weapons on the DualSense.
 
-[b]DualSense users: use [url=https://store.steampowered.com/app/1812620/DSX/]DSX[/url], or the new DualSense Native file without DSX (see Alternative installation).[/b] Both give you adaptive triggers and the lightbar. Xbox controllers work without anything extra.
+[line]
+
+[size=4][b]Which file do I need?[/b][/size]
+[list]
+[*][b]Xbox controller[/b] - main file
+[*][b]DualSense with DSX[/b] - main file
+[*][b]DualSense without DSX[/b] - optional file [i]DualSense Native (no DSX)[/i], experimental
+[/list]
+
+[line]
 
 [size=4][b]What's new in v1.8.0[/b][/size]
 [list]
-[*][b]DualSense without DSX:[/b] new optional file [i]DualSense Native[/i]. Rumble, adaptive triggers and lightbar go straight to the controller, with Steam Input on (see Alternative installation)
-[*][b]PlayStation buttons[/b] in game with the Native file (needs Lenny's Mod Loader)
-[*][b]Footsteps dropdown in F11:[/b] switch footsteps off, set their strength, and turn them on or off for walking, running and sprinting on their own
-[*]Walking no longer rumbles by default, on foot and on horseback (switch it back on in the F11 dropdowns)
+[*][b]DualSense without DSX:[/b] the new DualSense Native file talks to the controller itself
+[*][b]PlayStation buttons[/b] in game with the Native file
+[*][b]Footsteps dropdown in F11:[/b] on or off, strength, and walking / running / sprinting separately
+[*]Walking no longer rumbles by default (switch it back on in F11)
 [*]F11 dropdowns open one at a time, and the Advanced settings page is more compact
 [/list]
+
+[line]
 
 [size=4][b]Features[/b][/size]
 [list]
@@ -24,45 +35,57 @@
 [*][b]Fights and damage[/b] - punches given and taken, wounds, animal attacks
 [*][b]World[/b] - water, swimming, doors, carrying bodies, eating and items, sliding, falls, wagons, cutscenes
 [*][b]Low health[/b] - a heartbeat
-[*][b]DualSense only:[/b] adaptive triggers tuned per weapon (plus bow and lasso), lightbar that changes with the place you are in and turns red in fights
+[*][b]DualSense only[/b] - adaptive triggers per weapon (plus bow and lasso), and a lightbar that changes with the place you are in and turns red in fights
 [/list]
+
+[line]
 
 [size=4][b]Requirements[/b][/size]
 [list]
-[*][url=https://www.dev-c.com/rdr2/scripthookrdr2/]Script Hook RDR2[/url]
-[*]DualSense with [url=https://store.steampowered.com/app/1812620/DSX/]DSX[/url], or DualSense without DSX (DualSense Native file), or an Xbox controller
-[*]Alternative (DualSense Native file only): [url=https://www.rdr2mods.com/downloads/rdr2/tools/76-lennys-mod-loader-rdr/]Lenny's Mod Loader[/url], needed for the PlayStation buttons
+[*][url=https://www.dev-c.com/rdr2/scripthookrdr2/]Script Hook RDR2[/url] - for every file
+[*][url=https://store.steampowered.com/app/1812620/DSX/]DSX[/url] - only for a DualSense with the main file
+[*][url=https://www.rdr2mods.com/downloads/rdr2/tools/76-lennys-mod-loader-rdr/]Lenny's Mod Loader[/url] - only for PlayStation buttons with the Native file
 [/list]
 
-[size=4][b]Installation[/b][/size]
+[line]
+
+[size=4][b]Installation: main file (Xbox, or DualSense with DSX)[/b][/size]
 [list=1]
 [*]Install Script Hook RDR2.
 [*]Copy [i]RDR2DSXRumble.asi[/i] and [i]RDR2DSXRumble.ini[/i] into the game folder (next to [i]RDR2.exe[/i]).
-[*]DualSense with DSX: in DSX turn on [b]Incoming UDP[/b] (Settings > Networking) and turn [b]Rumble to Haptics OFF[/b]. Start DSX before the game.
+[*][b]DualSense only:[/b] in DSX turn [b]Incoming UDP on[/b] (Settings > Networking) and [b]Rumble to Haptics off[/b]. Start DSX before the game.
 [/list]
 
-[size=4][b]Alternative installation: DualSense without DSX (experimental)[/b][/size]
-Optional file [i]DualSense Native (no DSX)[/i]. The mod talks to the DualSense itself: same rumble, adaptive triggers and lightbar.
+[size=4][b]Installation: DualSense Native (no DSX)[/b][/size]
 [list=1]
 [*]Install Script Hook RDR2.
-[*]Copy [i]RDR2DSXRumble.asi[/i] and [i]RDR2DSXRumble.ini[/i] from the DualSense Native zip into the game folder.
-[*][b]PlayStation buttons:[/b] install [url=https://www.rdr2mods.com/downloads/rdr2/tools/76-lennys-mod-loader-rdr/]Lenny's Mod Loader[/url] and copy the [i]lml[/i] folder from the zip into the game folder.
-[*]Steam: RDR2 > Properties > Controller > Steam Input [b]ON[/b]. Keep DSX closed.
+[*]Copy [i]RDR2DSXRumble.asi[/i] and [i]RDR2DSXRumble.ini[/i] into the game folder.
+[*]For PlayStation buttons: install Lenny's Mod Loader, then copy the [i]lml[/i] folder from the zip into the game folder.
+[*]In Steam: RDR2 > Properties > Controller > Steam Input [b]on[/b]. Keep DSX closed.
 [/list]
 
+[line]
+
 [size=4][b]Settings[/b][/size]
-Press [b]F11[/b] in game. Everything else is in [i]RDR2DSXRumble.ini[/i] (changes apply while the game runs).
+Press [b]F11[/b] in game.
+More options are in [i]RDR2DSXRumble.ini[/i]. Changes apply while the game runs.
+
+[line]
 
 [size=4][b]Troubleshooting[/b][/size]
 [list]
-[*][b]No rumble:[/b] DualSense with DSX - check DSX is running with Incoming UDP on. DualSense Native - check DSX is closed and Steam Input is ON. Then check [i]RDR2DSXRumble.log[/i] in the game folder.
+[*][b]No rumble with DSX:[/b] check that DSX is running with Incoming UDP on.
+[*][b]No rumble with Native:[/b] check that DSX is closed and Steam Input is on.
+[*][b]Still nothing:[/b] look at [i]RDR2DSXRumble.log[/i] in the game folder.
 [*][b]Weak rumble on DualSense:[/b] turn off "Rumble to Haptics" in DSX.
-[*][b]Double rumble or fighting triggers:[/b] disable other vibration/DualSense mods.
+[*][b]Double rumble or fighting triggers:[/b] disable other vibration or DualSense mods.
 [*]Story mode only.
 [/list]
 
+[line]
+
 [size=4][b]Credits[/b][/size]
 Alexander Blade (Script Hook RDR2), Paliverse (DSX), alloc8or (RDR3 native database)
-Source code: [url=https://github.com/Zyancalili/RDR2-DSX-Rumble]GitHub[/url] (BSD 2-Clause)
+Source code on [url=https://github.com/Zyancalili/RDR2-DSX-Rumble]GitHub[/url] (BSD 2-Clause)
 
 [i]This mod is vibecoded: it was written with the help of AI (Claude).[/i]
