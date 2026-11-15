@@ -1,8 +1,8 @@
 """DualSense Native edition: PlayStation button prompts from the game's own art.
 
 RDR2's gamepad_icons_pc.gfx (the newer copy, from the update archive) holds both icon sets: Xbox `button_N_img`
-and PlayStation `ps4_button_N_img`. With Steam Input the game always draws the Xbox slots. This swaps each pair's
-image record (everything after the character ID), so every Xbox slot shows the matching PS4 image.
+and PlayStation `ps4_button_N_img`. With Steam Input the game always draws the Xbox slots. This copies each PS4
+image record (everything after the character ID) into its Xbox twin, so every Xbox slot shows the matching PS4 image.
 
 usage: python -I tools/make_ps_prompts.py <exported gamepad_icons_pc.gfx> <output .gfx>
 """
@@ -56,24 +56,23 @@ def main(src, dst):
     pairs = [(n, "ps4_" + n) for n in images if re.fullmatch(r"button_\d+_img", n) and "ps4_" + n in images]
     if not pairs:
         sys.exit("no Xbox/PS4 icon pairs found: this is not the newer gamepad_icons_pc.gfx (export the larger one)")
+    # Copy, not swap: the PS4 slots keep their images, so a real or DSX-emulated DualShock 4 still shows PlayStation buttons.
     for xb, ps in pairs:
         a, b = images[xb], images[ps]
-        a[1], b[1] = a[1][:2] + b[1][2:], b[1][:2] + a[1][2:]
+        a[1] = a[1][:2] + b[1][2:]
     out = write_tags(head, tags)
 
-    # self-check: nothing else changed, and each Xbox character ID now carries the PS4 image and the other way round
+    # self-check: only the Xbox image records changed, each now holding its PS4 twin's record under its own ID
     _, check = read_tags(out)
-    assert len(check) == len(tags) and struct.unpack_from("<I", out, 4)[0] == len(out) == len(d)
-    orig = {image_name(t[1]): t[1][:2] for t in read_tags(d)[1] if t[0] == EXT_IMAGE}
-    now = {image_name(t[1]): t[1][:2] for t in check if t[0] == EXT_IMAGE}
-    for xb, ps in pairs:
-        assert now[ps] == orig[xb] and now[xb] == orig[ps], xb
-    swapped = {id(images[n]) for pair in pairs for n in pair}
     before = read_tags(d)[1]
+    assert len(check) == len(before) and struct.unpack_from("<I", out, 4)[0] == len(out)
+    copied = {id(images[xb]) for xb, _ in pairs}
     for t0, t1, t in zip(before, check, tags):
-        assert t0[0] == t1[0] and (id(t) in swapped or t0[1] == t1[1])
+        assert t0[0] == t1[0] and (id(t) in copied or t0[1] == t1[1])
+    ps_ids = {image_name(t[1]) for t in check if t[0] == EXT_IMAGE}
+    assert all(xb not in ps_ids for xb, _ in pairs)   # no slot draws an Xbox image any more
     open(dst, "wb").write(out)
-    print(f"{len(pairs)} icon pairs swapped -> {dst} ({len(out)} bytes)")
+    print(f"{len(pairs)} Xbox icons now show their PS4 twin -> {dst} ({len(out)} bytes)")
 
 
 if __name__ == "__main__":
