@@ -530,36 +530,52 @@ namespace Pad {
                                    nullptr, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr);
             if (d == INVALID_HANDLE_VALUE) { if (dualsense && looksDS) { denied++; deniedErr = GetLastError(); } continue; }
             HIDD_ATTRIBUTES a{}; a.Size = sizeof a;
-            bool match = HidD_GetAttributes(d, &a) && a.VendorID == 0x054C &&
+            bool gotAttr = HidD_GetAttributes(d, &a) != 0;
+            // Inside the game Steam's overlay lets HidD_GetAttributes fill in 054C:0CE6 and then report failure, to hide the
+            // pad. For a DualSense the device path (vid/pid) is the same information, so trust it.
+            bool viaPath = false;
+            if (dualsense && looksDS && !gotAttr) {
+                viaPath = true; a.VendorID = 0x054C; a.ProductID = path.find("0df2") != std::string::npos ? 0x0DF2 : 0x0CE6;
+            }
+            bool match = (gotAttr || viaPath) && a.VendorID == 0x054C &&
                          (dualsense ? (a.ProductID == 0x0CE6 || a.ProductID == 0x0DF2)
                                     : (a.ProductID == 0x05C4 || a.ProductID == 0x09CC));
             if (match) {
+                HIDP_CAPS caps{};
+                bool gotCaps = false;
                 PHIDP_PREPARSED_DATA pp;
                 if (HidD_GetPreparsedData(d, &pp)) {
-                    HIDP_CAPS caps;
-                    if (HidP_GetCaps(pp, &caps) == HIDP_STATUS_SUCCESS) {
-                        bool bt = dualsense && caps.InputReportByteLength != 64;   // USB input report = 64 bytes, Bluetooth = 78
-                        USHORT needOut = dualsense ? (bt ? 78 : 48) : 11;
-                        if (caps.OutputReportByteLength >= needOut && caps.OutputReportByteLength <= sizeof outBuf) {
-                            inLen = std::min<USHORT>(caps.InputReportByteLength, sizeof inBuf);
-                            outLen = caps.OutputReportByteLength;
-                            h = d; ok = true; isDS = dualsense; isBT = bt; fresh = true; seq = 0;
-                            if (dualsense) {
-                                // firmware "update version" (feature report 0x20, bytes 44-45): 2.21+ has the improved rumble
-                                // emulation. On Bluetooth, reading a feature report also switches the pad to its full reports.
-                                uint8_t fw[256] = {0x20};
-                                bool got = HidD_GetFeature(d, fw, std::clamp<USHORT>(caps.FeatureReportByteLength, 64, sizeof fw)) != 0;
-                                int ver = fw[44] | (fw[45] << 8);
-                                rumbleV2 = a.ProductID == 0x0DF2 || (got && ver >= 0x0215);
-                                Log("pad: DualSense%s %04X:%04X over %s (in %u, out %u bytes, firmware %d.%02d%s, rumble %s)",
-                                    a.ProductID == 0x0DF2 ? " Edge" : "", a.VendorID, a.ProductID, bt ? "Bluetooth" : "USB",
-                                    inLen, outLen, ver >> 8, ver & 255, got ? "" : " (not readable)", rumbleV2 ? "v2" : "v1");
-                                if (cfg.debug) Log("pad: path %s (from the %s list)", devPath, (int)pi < setupApi ? "SetupAPI" : "config manager");
-                            } else Log("pad: virtual DualShock 4 %04X:%04X (in %u, out %u bytes)", a.VendorID, a.ProductID, inLen, outLen);
-                        } else if (dualsense) Log("pad: DualSense found, but its output report is %u bytes (need %u..%u)",
-                                                  caps.OutputReportByteLength, needOut, (unsigned)sizeof outBuf);
-                    }
+                    gotCaps = HidP_GetCaps(pp, &caps) == HIDP_STATUS_SUCCESS;
                     HidD_FreePreparsedData(pp);
+                }
+                if (!gotCaps && dualsense) {   // same hiding trick on the report sizes: the known DualSense sizes instead
+                    // shortcut: Bluetooth sizes assumed 78/78/64; upgrade if a Bluetooth log shows writes failing
+                    bool btPath = path.find("{00001124-") != std::string::npos || path.find("&0002054c") != std::string::npos;
+                    caps.InputReportByteLength = btPath ? 78 : 64; caps.OutputReportByteLength = btPath ? 78 : 48;
+                    caps.FeatureReportByteLength = 64; gotCaps = true;
+                }
+                if (gotCaps) {
+                    bool bt = dualsense && caps.InputReportByteLength != 64;   // USB input report = 64 bytes, Bluetooth = 78
+                    USHORT needOut = dualsense ? (bt ? 78 : 48) : 11;
+                    if (caps.OutputReportByteLength >= needOut && caps.OutputReportByteLength <= sizeof outBuf) {
+                        inLen = std::min<USHORT>(caps.InputReportByteLength, sizeof inBuf);
+                        outLen = caps.OutputReportByteLength;
+                        h = d; ok = true; isDS = dualsense; isBT = bt; fresh = true; seq = 0;
+                        if (dualsense) {
+                            // firmware "update version" (feature report 0x20, bytes 44-45): 2.21+ has the improved rumble
+                            // emulation. On Bluetooth, reading a feature report also switches the pad to its full reports.
+                            uint8_t fw[256] = {0x20};
+                            bool got = HidD_GetFeature(d, fw, std::clamp<USHORT>(caps.FeatureReportByteLength, 64, sizeof fw)) != 0;
+                            int ver = got ? fw[44] | (fw[45] << 8) : 0;
+                            rumbleV2 = a.ProductID == 0x0DF2 || ver >= 0x0215 || !got;   // unreadable: assume a current firmware
+                            Log("pad: DualSense%s %04X:%04X over %s (in %u, out %u bytes, firmware %d.%02d%s, rumble %s%s)",
+                                a.ProductID == 0x0DF2 ? " Edge" : "", a.VendorID, a.ProductID, bt ? "Bluetooth" : "USB",
+                                inLen, outLen, ver >> 8, ver & 255, got ? "" : " (not readable)", rumbleV2 ? "v2" : "v1",
+                                viaPath ? ", found past Steam's filter" : "");
+                            if (cfg.debug) Log("pad: path %s (from the %s list)", devPath, (int)pi < setupApi ? "SetupAPI" : "config manager");
+                        } else Log("pad: virtual DualShock 4 %04X:%04X (in %u, out %u bytes)", a.VendorID, a.ProductID, inLen, outLen);
+                    } else if (dualsense) Log("pad: DualSense found, but its output report is %u bytes (need %u..%u)",
+                                              caps.OutputReportByteLength, needOut, (unsigned)sizeof outBuf);
                 }
             }
             if (!ok) CloseHandle(d);
