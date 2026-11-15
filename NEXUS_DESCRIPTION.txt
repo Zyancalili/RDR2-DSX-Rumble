@@ -10,6 +10,7 @@
 [size=4][b]What's new in v1.7.1[/b][/size]
 [list]
 [*][b]Footsteps dropdown in F11:[/b] switch footsteps off, set their strength, and turn them on or off for walking, running and sprinting on their own
+[*]Walking no longer rumbles by default, on foot and on horseback (switch it back on in the F11 dropdowns)
 [*]The Advanced settings page is more compact
 [/list]
 

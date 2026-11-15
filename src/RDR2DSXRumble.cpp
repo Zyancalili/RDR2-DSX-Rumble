@@ -236,8 +236,8 @@ struct Config {
     float intensity = 1.0f;
     float curve = 2.0f;
     float footsteps = 1.0f, horse = 1.0f, weapons = 1.0f, reload = 1.0f, damage = 1.0f, weaponSwitch = 1.0f;
-    bool  horseWalk = true, horseTrot = true, horseCanter = true, horseGallop = true;   // hoofbeats per gait
-    bool  footWalk = true, footRun = true, footSprint = true;                           // footsteps per pace
+    bool  horseWalk = false, horseTrot = true, horseCanter = true, horseGallop = true;   // hoofbeats per gait
+    bool  footWalk = false, footRun = true, footSprint = true;                           // footsteps per pace
     float melee = 1.0f, water = 1.0f, swimming = 1.0f;
     float animals = 1.0f, doors = 1.0f, carry = 1.0f, sliding = 1.0f, items = 1.0f;
     bool  muteUnfocused = true;
@@ -284,11 +284,11 @@ static void LoadConfig() {
     c.curve      = std::clamp(IniF("Rumble", "ResponseCurve", 2.0f), 0.5f, 4.f);
     c.footsteps  = Effect("Footsteps");
     c.horse      = IniI("Rumble", "HorseRumble", 1) ? IniF("Rumble", "Horse", 100) / 100.f : 0.f;   // HorseRumble=0 mutes all horse rumble
-    c.horseWalk  = IniI("Rumble", "HorseWalk", 1) != 0;
+    c.horseWalk  = IniI("Rumble", "HorseWalk", 0) != 0;
     c.horseTrot  = IniI("Rumble", "HorseTrot", 1) != 0;
     c.horseCanter = IniI("Rumble", "HorseCanter", 1) != 0;
     c.horseGallop = IniI("Rumble", "HorseGallop", 1) != 0;
-    c.footWalk   = IniI("Rumble", "FootWalk", 1) != 0;
+    c.footWalk   = IniI("Rumble", "FootWalk", 0) != 0;
     c.footRun    = IniI("Rumble", "FootRun", 1) != 0;
     c.footSprint = IniI("Rumble", "FootSprint", 1) != 0;
     c.weapons    = Effect("Weapons");
