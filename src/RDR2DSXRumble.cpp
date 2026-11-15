@@ -11,6 +11,7 @@
 //  * Startup      : the gunshot of the startup splash, detected from the game's own audio level.
 //  * DSX (UDP)    : adaptive triggers per weapon (revolver/rifle/shotgun/bow/lasso), galloping
 //                   triggers on horseback, lightbar colour by place (red in fights) with a red flash on damage.
+//  * Direct       : optional, without DSX: the same triggers, lightbar and rumble written to the DualSense over HID.
 //
 // Needs ScriptHookRDR2 (no SDK needed: its exports are resolved at runtime).
 
@@ -69,11 +70,11 @@ static fnNativePush64     shPush;
 static fnNativeCall       shCall;
 static HMODULE            g_module;
 // Versions: 1.6 -> 1.7 for a new version, 1.6 -> 1.6.1 -> 1.6.2 for bug fixes and small features
-#define MOD_VERSION "v1.7.1"
-#define MOD_VERSION_W L"1.7.1"
+#define MOD_VERSION "v1.8.0"
+#define MOD_VERSION_W L"1.8.0"
 #define MOD_VER_MAJOR 1
-#define MOD_VER_MINOR 7
-#define MOD_VER_PATCH 1
+#define MOD_VER_MINOR 8
+#define MOD_VER_PATCH 0
 // Update check: the tag of the latest GitHub release (tags look like v1.6 / v1.6.1).
 #define UPDATE_HOST L"api.github.com"
 #define UPDATE_PATH L"/repos/Zyancalili/RDR2-DSX-Rumble/releases/latest"
@@ -245,6 +246,7 @@ struct Config {
     float landing = 1.0f, vehicle = 1.0f, heartbeat = 1.0f;
     float lowHealth = 0.20f;
     bool  dsx = true, triggers = true, lightbar = true, gallopTriggers = true;
+    bool  direct = false;          // DualSense without DSX: triggers, lightbar and rumble written straight to the pad
     bool  fireAtBreak = true;
     float breakAdjust = 0.f;      // fraction of trigger travel added to the break point
     int   dsxPort = 0;            // 0 = auto
@@ -319,6 +321,7 @@ static void LoadConfig() {
     c.fireAtBreak     = IniI("DSX", "FireAtBreakPoint", 0) != 0;
     c.breakAdjust     = std::clamp(IniF("DSX", "BreakPointAdjust", 0), -30.f, 30.f) / 100.f;
     c.lightbar        = IniI("DSX", "Lightbar", 1) != 0;
+    c.direct          = IniI("DSX", "DirectDualSense", 0) != 0;
     cfg = c;
 }
 
@@ -412,6 +415,11 @@ static void AddTrigger(DSX::Packet& pk, int side, const TriggerFx& t) {
     }
 }
 
+#include "dualsense.inl"
+// What the DualSense should show in Direct mode. The script thread publishes, the pad thread writes.
+static std::atomic<uint64_t> g_dsTrigL{0}, g_dsTrigR{0};   // L2 / R2 effect, packed by DS5::Pack (0 = loose)
+static std::atomic<uint32_t> g_dsRgb{0x000040};            // lightbar 0xRRGGBB (starts at Steam's default blue)
+
 // ---------------------------------------------------------------------------------------------
 // Rumble mixer
 // ---------------------------------------------------------------------------------------------
@@ -456,7 +464,10 @@ namespace Pad {
     static USHORT     inLen = 0, outLen = 0;
     static OVERLAPPED rov{}, wov{};
     static bool       reading = false, writing = false;
-    static uint8_t    inBuf[256], outBuf[256];
+    static bool       isDS = false, isBT = false, rumbleV2 = false;   // real DualSense open / over Bluetooth / firmware 2.21+
+    static bool       fresh = false;                                  // just (re)opened: write the whole state once
+    static uint8_t    seq = 0;                                        // Bluetooth report sequence, 0..15
+    static uint8_t    inBuf[256], outBuf[1024];                       // the Bluetooth output length may be 547 (unverified)
     static uint64_t   lastOpenTry = 0;
 
     static void LoadXInput() {
@@ -473,14 +484,17 @@ namespace Pad {
     static void Close() {
         if (h != INVALID_HANDLE_VALUE) { CancelIo(h); CloseHandle(h); h = INVALID_HANDLE_VALUE; }
         reading = writing = false;
+        isDS = false;
     }
 
-    static bool OpenDS4() {
+    // dualsense = false: DSX's virtual DualShock 4 (054C:05C4 / 09CC). true: the real DualSense (0CE6) or DualSense Edge (0DF2).
+    static bool OpenHid(bool dualsense) {
         GUID hidGuid; HidD_GetHidGuid(&hidGuid);
         HDEVINFO set = SetupDiGetClassDevsA(&hidGuid, nullptr, nullptr, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
         if (set == INVALID_HANDLE_VALUE) return false;
         SP_DEVICE_INTERFACE_DATA ifd{}; ifd.cbSize = sizeof ifd;
         bool ok = false;
+        int seen = 0, denied = 0; DWORD deniedErr = 0;
         for (DWORD i = 0; !ok && SetupDiEnumDeviceInterfaces(set, nullptr, &hidGuid, i, &ifd); i++) {
             DWORD need = 0;
             SetupDiGetDeviceInterfaceDetailA(set, &ifd, nullptr, 0, &need, nullptr);
@@ -488,20 +502,43 @@ namespace Pad {
             auto* det = (SP_DEVICE_INTERFACE_DETAIL_DATA_A*)mem.data();
             det->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_A);
             if (!SetupDiGetDeviceInterfaceDetailA(set, &ifd, det, need, nullptr, nullptr)) continue;
+            seen++;
+            std::string path = det->DevicePath;   // USB "...vid_054c&pid_0ce6...", Bluetooth "...vid&0002054c_pid&0ce6..."
+            for (char& ch : path) ch = (char)tolower((unsigned char)ch);
+            bool looksDS = path.find("054c") != std::string::npos &&
+                           (path.find("0ce6") != std::string::npos || path.find("0df2") != std::string::npos);
             HANDLE d = CreateFileA(det->DevicePath, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
                                    nullptr, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr);
-            if (d == INVALID_HANDLE_VALUE) continue;
+            if (d == INVALID_HANDLE_VALUE) { if (dualsense && looksDS) { denied++; deniedErr = GetLastError(); } continue; }
             HIDD_ATTRIBUTES a{}; a.Size = sizeof a;
-            // DualShock 4 (v1 0x05C4 / v2 0x09CC) - this is what DSX emulates. The real DualSense (0x0CE6) is left alone.
-            if (HidD_GetAttributes(d, &a) && a.VendorID == 0x054C && (a.ProductID == 0x05C4 || a.ProductID == 0x09CC)) {
+            bool match = HidD_GetAttributes(d, &a) && a.VendorID == 0x054C &&
+                         (dualsense ? (a.ProductID == 0x0CE6 || a.ProductID == 0x0DF2)
+                                    : (a.ProductID == 0x05C4 || a.ProductID == 0x09CC));
+            if (match) {
                 PHIDP_PREPARSED_DATA pp;
                 if (HidD_GetPreparsedData(d, &pp)) {
                     HIDP_CAPS caps;
-                    if (HidP_GetCaps(pp, &caps) == HIDP_STATUS_SUCCESS && caps.OutputReportByteLength >= 11) {
-                        inLen = std::min<USHORT>(caps.InputReportByteLength, sizeof inBuf);
-                        outLen = std::min<USHORT>(caps.OutputReportByteLength, sizeof outBuf);
-                        h = d; ok = true;
-                        Log("pad: virtual DualShock 4 %04X:%04X (in %u, out %u bytes)", a.VendorID, a.ProductID, inLen, outLen);
+                    if (HidP_GetCaps(pp, &caps) == HIDP_STATUS_SUCCESS) {
+                        bool bt = dualsense && caps.InputReportByteLength != 64;   // USB input report = 64 bytes, Bluetooth = 78
+                        USHORT needOut = dualsense ? (bt ? 78 : 48) : 11;
+                        if (caps.OutputReportByteLength >= needOut && caps.OutputReportByteLength <= sizeof outBuf) {
+                            inLen = std::min<USHORT>(caps.InputReportByteLength, sizeof inBuf);
+                            outLen = caps.OutputReportByteLength;
+                            h = d; ok = true; isDS = dualsense; isBT = bt; fresh = true; seq = 0;
+                            if (dualsense) {
+                                // firmware "update version" (feature report 0x20, bytes 44-45): 2.21+ has the improved rumble
+                                // emulation. On Bluetooth, reading a feature report also switches the pad to its full reports.
+                                uint8_t fw[256] = {0x20};
+                                bool got = HidD_GetFeature(d, fw, std::clamp<USHORT>(caps.FeatureReportByteLength, 64, sizeof fw)) != 0;
+                                int ver = fw[44] | (fw[45] << 8);
+                                rumbleV2 = a.ProductID == 0x0DF2 || (got && ver >= 0x0215);
+                                Log("pad: DualSense%s %04X:%04X over %s (in %u, out %u bytes, firmware %d.%02d%s, rumble %s)",
+                                    a.ProductID == 0x0DF2 ? " Edge" : "", a.VendorID, a.ProductID, bt ? "Bluetooth" : "USB",
+                                    inLen, outLen, ver >> 8, ver & 255, got ? "" : " (not readable)", rumbleV2 ? "v2" : "v1");
+                                if (cfg.debug) Log("pad: path %s", det->DevicePath);
+                            } else Log("pad: virtual DualShock 4 %04X:%04X (in %u, out %u bytes)", a.VendorID, a.ProductID, inLen, outLen);
+                        } else if (dualsense) Log("pad: DualSense found, but its output report is %u bytes (need %u..%u)",
+                                                  caps.OutputReportByteLength, needOut, (unsigned)sizeof outBuf);
                     }
                     HidD_FreePreparsedData(pp);
                 }
@@ -512,6 +549,15 @@ namespace Pad {
         if (ok) {
             if (!rov.hEvent) rov.hEvent = CreateEventA(nullptr, TRUE, FALSE, nullptr);
             if (!wov.hEvent) wov.hEvent = CreateEventA(nullptr, TRUE, FALSE, nullptr);
+        } else if (dualsense) {
+            static bool warned = false;
+            if (!warned) {
+                warned = true;
+                if (denied) Log("pad: a DualSense is connected but cannot be opened (error %lu). HidHide or another tool hides it from the game: "
+                                "add RDR2.exe to HidHide's allowed applications, or switch 'DualSense without DSX' off in F11.", deniedErr);
+                else        Log("pad: no DualSense found for the direct output (%d HID devices seen). If it is connected, something hides it "
+                                "from the game (HidHide or Steam Input). Rumble falls back to XInput; adaptive triggers and lightbar are off.", seen);
+            }
         }
         return ok;
     }
@@ -521,7 +567,7 @@ namespace Pad {
         uint64_t now = GetTickCount64();
         if (now - lastOpenTry < 2000) return;
         lastOpenTry = now;
-        if (OpenDS4()) return;
+        if (OpenHid(cfg.direct)) return;   // Direct mode: the real DualSense; otherwise DSX's virtual DualShock 4
         if (xget) {   // DSX in Xbox mode
             XState s;
             // an Xbox controller (or DSX in Xbox mode) - rumble works the same, there are just no adaptive triggers
@@ -536,6 +582,7 @@ namespace Pad {
 
     // strong = left/low-frequency motor, weak = right/high-frequency motor (0..255)
     static void Rumble(uint8_t strong, uint8_t weak) {
+        if (isDS) return;   // DS4 report format: never to a real DualSense (it gets WriteDS)
         if (h != INVALID_HANDLE_VALUE) {
             if (writing) {
                 if (WaitForSingleObject(wov.hEvent, 0) != WAIT_OBJECT_0) return;   // previous write still pending
@@ -555,6 +602,41 @@ namespace Pad {
             XVib v{(WORD)(strong * 257), (WORD)(weak * 257)};
             if (xset(xuser, &v) != 0) xuser = -1;
         }
+    }
+
+    // One DualSense report, asynchronously. false = the last write is still on its way, or it failed (the pad was closed).
+    static bool WriteDS(const DS5::Out& o) {
+        if (writing) {
+            if (WaitForSingleObject(wov.hEvent, 0) != WAIT_OBJECT_0) return false;
+            DWORD n; writing = false;
+            if (!GetOverlappedResult(h, &wov, &n, FALSE)) { Log("pad: DualSense write failed (%lu), reopening", GetLastError()); Close(); return false; }
+        }
+        memset(outBuf, 0, outLen);
+        DS5::Build(outBuf, isBT, seq, rumbleV2, o);
+        seq = (seq + 1) & 15;
+        ResetEvent(wov.hEvent);
+        if (WriteFile(h, outBuf, outLen, nullptr, &wov)) return true;
+        if (GetLastError() == ERROR_IO_PENDING) { writing = true; return true; }
+        Log("pad: DualSense write failed (%lu, %u bytes), reopening", GetLastError(), outLen);
+        Close();
+        return false;
+    }
+
+    // Triggers loose, motors off, lightbar back to Steam's default blue. Synchronous: at process exit the pad thread
+    // is already gone, and on an output switch the handle closes right after.
+    static void FinalReset() {
+        if (!isDS || h == INVALID_HANDLE_VALUE) return;
+        static uint8_t buf[sizeof outBuf];
+        memset(buf, 0, sizeof buf);
+        DS5::Out o; o.motors = o.trig = 1; o.light = cfg.lightbar; o.rgb[2] = 0x40;
+        DS5::Build(buf, isBT, seq, rumbleV2, o);
+        seq = (seq + 1) & 15;
+        OVERLAPPED ov{}; ov.hEvent = CreateEventA(nullptr, TRUE, FALSE, nullptr);
+        if (!WriteFile(h, buf, outLen, nullptr, &ov) && GetLastError() == ERROR_IO_PENDING) {
+            if (WaitForSingleObject(ov.hEvent, 100) != WAIT_OBJECT_0) CancelIo(h);
+            DWORD n; GetOverlappedResult(h, &ov, &n, TRUE);   // ov lives on this stack: never leave while the write is pending
+        }
+        CloseHandle(ov.hEvent);
     }
 
     static uint32_t FromDS4(const uint8_t* r) {
@@ -588,8 +670,24 @@ namespace Pad {
             DWORD n = 0;
             reading = false;
             if (!GetOverlappedResult(h, &rov, &n, FALSE)) { Close(); return false; }
-            if (n >= 8 && inBuf[0] == 0x01) { out = FromDS4(inBuf); return true; }
-            return false;
+            const uint8_t* r = nullptr;                                           // 5 bytes before the d-pad byte (DS4 layout)
+            if (!isDS)                 { if (n >= 8 && inBuf[0] == 0x01) r = inBuf; }
+            else if (!isBT)            { if (n >= 11 && inBuf[0] == 0x01) r = inBuf + 3; }
+            else if (inBuf[0] == 0x31) { if (n >= 12) r = inBuf + 4; }
+            else if (inBuf[0] == 0x01 && n >= 8) r = inBuf;                       // simple Bluetooth report
+            if (!r) return false;
+            if (cfg.debug && isDS && n >= 50 && !(isBT && inBuf[0] != 0x31)) {
+                const uint8_t* s = inBuf + (isBT ? 1 : 0);          // UNVERIFIED offsets: R2 state [42], L2 state [43], active effects [48]
+                static uint8_t last[3]; static uint64_t lastLog = 0;
+                uint8_t cur[3] = {s[42], s[43], s[48]};
+                uint64_t t = GetTickCount64();
+                if (memcmp(cur, last, 3) && t - lastLog > 250) {
+                    memcpy(last, cur, 3); lastLog = t;
+                    Log("pad: DualSense reports trigger state R2 %02X L2 %02X effects %02X", cur[0], cur[1], cur[2]);
+                }
+            }
+            out = FromDS4(r);
+            return true;
         }
         if (xuser >= 0 && xget) {
             static DWORD lastPacket = 0xFFFFFFFF;
@@ -685,13 +783,20 @@ static DWORD WINAPI PadThread(LPVOID) {
         bool scriptRunning = g_lastTick != 0 && now - g_lastTick < 500;
         bool menu = !scriptRunning || g_scriptMenu;
 
+        static bool wasDirect = cfg.direct;
+        if (cfg.direct != wasDirect) {            // output switched in F11 or the ini: let go of the pad and look again
+            wasDirect = cfg.direct;
+            Pad::FinalReset();
+            Pad::Close(); Pad::xuser = -1; Pad::lastOpenTry = 0;
+            Log("output: %s", cfg.direct ? "Direct (DualSense over HID, no DSX)" : "DSX (UDP)");
+        }
         Pad::EnsureOpen();
         static uint64_t lastFocus = 0;
         if (now - lastFocus > 100) {
             lastFocus = now;
             bool f = !cfg.muteUnfocused || GameFocused();
             if (f != g_focused.load()) {
-                if (!f && cfg.dsx && cfg.triggers) {   // left the game: let both triggers go loose right away
+                if (!f && cfg.dsx && cfg.triggers && !cfg.direct) {   // left the game: let both triggers go loose right away (Direct: below)
                     DSX::Packet pk;
                     pk.Add(DSX::TriggerUpdate, {cfg.controllerIndex, DSX::Left, DSX::Normal});
                     pk.Add(DSX::TriggerUpdate, {cfg.controllerIndex, DSX::Right, DSX::Normal});
@@ -705,7 +810,7 @@ static DWORD WINAPI PadThread(LPVOID) {
 
         // --- start screen: lightbar red until the game's scripts run (resent each second in case DSX restarts) ---
         static uint64_t lastRed = 0;
-        if (cfg.dsx && cfg.lightbar && !scriptRunning && focused && now - lastRed > 1000) {
+        if (cfg.dsx && cfg.lightbar && !cfg.direct && !scriptRunning && focused && now - lastRed > 1000) {
             lastRed = now;
             if (DSX::sock == INVALID_SOCKET) DSX::Open();
             DSX::Packet pk;
@@ -775,7 +880,42 @@ static DWORD WINAPI PadThread(LPVOID) {
         bool active = S > 2 || W > 2;
         if (!active) { S = W = 0; }
         bool owned = active || cfg.backend == 1 || pulses.size();   // only touch the pad when we have something to say
-        if (Pad::Ready() && (owned || lastS > 0 || lastW > 0)) {
+        if (Pad::isDS) {
+            // The real DualSense: one report carries motors, triggers and lightbar. A part gets its valid flag only
+            // while the mod owns it, so the reports Steam Input sends for the game's own rumble are left alone.
+            static DS5::Out sent;
+            static uint64_t lastDs = 0;
+            DS5::Out o;
+            if (active || lastS > 0 || lastW > 0) { o.motors = 1; o.strong = (uint8_t)S; o.weak = (uint8_t)W; }
+            // an effect only while the game runs in front; loose on the start screen, when alt-tabbed and while quitting
+            bool live = cfg.dsx && cfg.triggers && cfg.enabled && scriptRunning && focused;
+            DS5::Unpack(live ? g_dsTrigL.load() : 0, o.l2);
+            DS5::Unpack(live ? g_dsTrigR.load() : 0, o.r2);
+            o.trig = (cfg.dsx && cfg.triggers) || Pad::fresh || (sent.trig && (sent.l2[0] != 0x05 || sent.r2[0] != 0x05));
+            if (cfg.dsx && cfg.lightbar) {
+                uint32_t c = scriptRunning ? g_dsRgb.load() : 0xE60A0Au;   // start screen: red until the game's scripts run
+                o.light = 1; o.rgb[0] = (uint8_t)(c >> 16); o.rgb[1] = (uint8_t)(c >> 8); o.rgb[2] = (uint8_t)c;
+            }
+            o.ledSetup = Pad::fresh && Pad::isBT;
+            bool changed = Pad::fresh || memcmp(&o, &sent, sizeof o) != 0;
+            bool keep = focused && cfg.enabled && (o.trig || o.light) && now - lastDs > 2000;   // Steam Input may have written its own state
+            bool refresh = active && now - lastWrite > 60;
+            if (!(o.motors || o.trig || o.light || o.ledSetup)) sent = o;                       // nothing of ours to say
+            else if ((changed || keep || refresh) && now - lastDs >= (Pad::isBT ? 20u : 10u) && Pad::WriteDS(o)) {
+                sent = o; lastDs = lastWrite = now; lastS = S; lastW = W; Pad::fresh = false;
+                if (cfg.debug) {
+                    static uint64_t lastLog = 0; static int unlogged = 0;
+                    if (now - lastLog < 100) unlogged++;
+                    else {
+                        Log("DS <- motors %s%d/%d | L2 %s%02X %02X %02X %02X %02X | R2 %02X %02X %02X %02X %02X | rgb %s%d,%d,%d%s (+%d writes not logged)",
+                            o.motors ? "" : "(not sent) ", o.strong, o.weak, o.trig ? "" : "(not sent) ", o.l2[0], o.l2[1], o.l2[2], o.l2[3], o.l2[4],
+                            o.r2[0], o.r2[1], o.r2[2], o.r2[3], o.r2[4], o.light ? "" : "(not sent) ", o.rgb[0], o.rgb[1], o.rgb[2],
+                            keep && !changed ? " [re-assert]" : "", unlogged);
+                        lastLog = now; unlogged = 0;
+                    }
+                }
+            }
+        } else if (Pad::Ready() && (owned || lastS > 0 || lastW > 0)) {
             if (S != lastS || W != lastW || (active && now - lastWrite > 60)) {
                 Pad::Rumble((uint8_t)S, (uint8_t)W);
                 lastS = S; lastW = W; lastWrite = now;
@@ -1043,10 +1183,13 @@ static float Rand01() { return (float)(rand() & 0x7FFF) / 32767.f; }
 
 static void ResetDSX() {
     if (!cfg.dsx) return;
-    DSX::Packet pk;
-    pk.Add(DSX::TriggerThreshold, {cfg.controllerIndex, DSX::Right, 0});
-    pk.Add(DSX::ResetToUserSettings, {cfg.controllerIndex});
-    pk.Send();
+    if (cfg.direct) { g_dsTrigL = 0; g_dsTrigR = 0; g_dsRgb = 0x000040; }   // loose triggers, Steam's default blue: the pad thread writes it
+    else {
+        DSX::Packet pk;
+        pk.Add(DSX::TriggerThreshold, {cfg.controllerIndex, DSX::Right, 0});
+        pk.Add(DSX::ResetToUserSettings, {cfg.controllerIndex});
+        pk.Send();
+    }
     S.sentValid = false;
     S.rgb[0] = S.rgb[1] = S.rgb[2] = -1;
 }
@@ -1806,7 +1949,7 @@ static void Tick(float dt) {
     // --- DSX: triggers + lightbar --------------------------------------------------------------
     if (!cfg.dsx) return;
     DWORD now = GetTickCount();
-    bool keepAlive = now - S.lastDsx > 3000;      // resend in case DSX was restarted
+    bool keepAlive = !cfg.direct && now - S.lastDsx > 3000;   // resend in case DSX was restarted (Direct: the pad thread re-asserts)
     DSX::Packet pk;
 
     if (cfg.triggers) {
@@ -1823,8 +1966,11 @@ static void Tick(float dt) {
                 lt = rt = TFx(DSX::Galloping, {0, 9, 2, 5, freq});
             }
         }
-        if (!S.sentValid || !(lt == S.sentL) || keepAlive) AddTrigger(pk, DSX::Left, lt);
-        if (!S.sentValid || !(rt == S.sentR) || keepAlive) AddTrigger(pk, DSX::Right, rt);
+        if (cfg.direct) { g_dsTrigL = DS5::Pack(lt.mode, lt.p); g_dsTrigR = DS5::Pack(rt.mode, rt.p); }
+        else {
+            if (!S.sentValid || !(lt == S.sentL) || keepAlive) AddTrigger(pk, DSX::Left, lt);
+            if (!S.sentValid || !(rt == S.sentR) || keepAlive) AddTrigger(pk, DSX::Right, rt);
+        }
         S.sentL = lt; S.sentR = rt; S.sentValid = true;
     }
 
@@ -1850,7 +1996,8 @@ static void Tick(float dt) {
         bool diff = std::abs(c[0] - S.rgb[0]) + std::abs(c[1] - S.rgb[1]) + std::abs(c[2] - S.rgb[2]) > 12;
         static DWORD lastRgb = 0;
         if ((diff && now - lastRgb > 50) || keepAlive) {
-            pk.Add(DSX::RGBUpdate, {cfg.controllerIndex, c[0], c[1], c[2]});
+            if (cfg.direct) g_dsRgb = (uint32_t)(std::clamp(c[0], 0, 255) << 16 | std::clamp(c[1], 0, 255) << 8 | std::clamp(c[2], 0, 255));
+            else pk.Add(DSX::RGBUpdate, {cfg.controllerIndex, c[0], c[1], c[2]});
             S.rgb[0] = c[0]; S.rgb[1] = c[1]; S.rgb[2] = c[2];
             lastRgb = now;
         }
@@ -1863,7 +2010,8 @@ static void Tick(float dt) {
 static void ScriptMain() {
     srand(GetTickCount());
     LoadConfig();
-    Log("RDR2 Controller Rumble " MOD_VERSION " - script started (backend=%s, dsx=%d)", cfg.backend ? "Direct" : "Game", (int)cfg.dsx);
+    Log("RDR2 Controller Rumble " MOD_VERSION " - script started (backend=%s, dsx=%d, output=%s)", cfg.backend ? "Direct" : "Game",
+        (int)cfg.dsx, cfg.direct ? "Direct" : "DSX");
     InitWeapons();
     if (DSX::sock == INVALID_SOCKET) DSX::Open();   // the pad thread may have opened it for the start screen
     StartUpdateCheck();
@@ -1917,13 +2065,16 @@ BOOL APIENTRY DllMain(HMODULE mod, DWORD reason, LPVOID) {
         DeleteFileA(g_logPath);
         LoadConfig();
         Log("RDR2 Controller Rumble loaded");
+        Log("output: %s", cfg.direct ? "Direct (DualSense over HID, no DSX)" : "DSX (UDP)");
         if (HANDLE t = CreateThread(nullptr, 0, PadThread, nullptr, 0, nullptr)) CloseHandle(t);
         if (!BindScriptHook()) { Log("ScriptHookRDR2.dll not found or incompatible - in-game features inactive"); return TRUE; }
         shRegister(mod, ScriptMain);
     } else if (reason == DLL_PROCESS_DETACH) {
         g_quit = true;
         if (shUnregister) shUnregister(mod);
-        if (DSX::sock != INVALID_SOCKET) { ResetDSX(); DSX::Close(); }
+        if (cfg.direct) Pad::FinalReset();
+        else if (DSX::sock != INVALID_SOCKET) ResetDSX();
+        if (DSX::sock != INVALID_SOCKET) DSX::Close();
     }
     return TRUE;
 }

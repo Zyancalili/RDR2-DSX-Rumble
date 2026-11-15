@@ -246,6 +246,7 @@ static MenuItem g_items[] = {
     {"Rumble in cutscenes",    "General", "CutsceneRumble",     1, 1},
     {"Adaptive triggers",      "DSX",     "AdaptiveTriggers",   1, 1},
     {"Lightbar",               "DSX",     "Lightbar",           1, 1},
+    {"DualSense without DSX",  "DSX",     "DirectDualSense",    1, 0},
     {"Menu clicks",            "Menu",    "ButtonRumble",       1, 1},
     {"Mute when alt-tabbed",   "General", "MuteWhenUnfocused",  1, 1},
     {"Check for updates",      "General", "CheckForUpdates",    1, 1},
@@ -360,7 +361,8 @@ static void MenuOpen() {
     UI::UpdateScreen();
     M.paused = IniI("General", "MenuPausesGame", 1) != 0;
     if (M.paused) NatV(UI::SET_GAME_PAUSED, 1);
-    if (cfg.dsx) {                    // loose triggers while the menu is open
+    if (cfg.direct) { g_dsTrigL = 0; g_dsTrigR = 0; }   // loose triggers while the menu is open (the pad thread writes it)
+    else if (cfg.dsx) {               // loose triggers while the menu is open
         DSX::Packet pk;
         pk.Add(DSX::TriggerUpdate, {cfg.controllerIndex, DSX::Left, DSX::Normal});
         pk.Add(DSX::TriggerUpdate, {cfg.controllerIndex, DSX::Right, DSX::Normal});
