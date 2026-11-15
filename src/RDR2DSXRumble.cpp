@@ -1057,19 +1057,24 @@ static void ScanSnow(int mount, float dt) {
     S.snow += (S.snowTarget - S.snow) * std::min(1.f, dt / 0.4f);   // ease in and out over a few strides
 }
 
+// Is rumble switched on for the gait the horse is in right now? (F11 > Horse dropdown)
+static bool HorseGaitOn(float speed) {
+    return speed < 2.6f ? cfg.horseWalk : speed < 5.2f ? cfg.horseTrot : speed < 8.5f ? cfg.horseCanter : cfg.horseGallop;
+}
+
 // Hoofbeat pattern per gait. Offsets are fractions of one stride.
 static void HorseRumble(float speed, float dt) {
     static const float walk[]   = {0.f, 0.25f, 0.5f, 0.75f};
     static const float trot[]   = {0.f, 0.5f};
     static const float canter[] = {0.f, 0.16f, 0.30f};
     static const float gallop[] = {0.f, 0.09f, 0.18f, 0.27f};
-    const float* pat; int n; float stride, amp, dur; bool on;
+    const float* pat; int n; float stride, amp, dur;
     // A 500 kg animal: hoofbeats are dull thuds through the saddle - above footsteps, below gunfire.
-    if (speed < 2.6f)      { on = cfg.horseWalk;   pat = walk;   n = 4; stride = 1.15f - speed * 0.08f; amp = 0.20f; dur = 0.040f; }
-    else if (speed < 5.2f) { on = cfg.horseTrot;   pat = trot;   n = 2; stride = 0.80f - (speed - 2.6f) * 0.03f; amp = 0.28f; dur = 0.045f; }
-    else if (speed < 8.5f) { on = cfg.horseCanter; pat = canter; n = 3; stride = 0.66f - (speed - 5.2f) * 0.02f; amp = 0.34f; dur = 0.048f; }
-    else                   { on = cfg.horseGallop; pat = gallop; n = 4; stride = std::max(0.42f, 0.56f - (speed - 8.5f) * 0.02f); amp = 0.40f; dur = 0.045f; }
-    if (speed < 0.6f || !on) { S.hoofPhase = 0; S.hoofIdx = 0; return; }   // standing, or this gait is switched off
+    if (speed < 2.6f)      { pat = walk;   n = 4; stride = 1.15f - speed * 0.08f; amp = 0.20f; dur = 0.040f; }
+    else if (speed < 5.2f) { pat = trot;   n = 2; stride = 0.80f - (speed - 2.6f) * 0.03f; amp = 0.28f; dur = 0.045f; }
+    else if (speed < 8.5f) { pat = canter; n = 3; stride = 0.66f - (speed - 5.2f) * 0.02f; amp = 0.34f; dur = 0.048f; }
+    else                   { pat = gallop; n = 4; stride = std::max(0.42f, 0.56f - (speed - 8.5f) * 0.02f); amp = 0.40f; dur = 0.045f; }
+    if (speed < 0.6f || !HorseGaitOn(speed)) { S.hoofPhase = 0; S.hoofIdx = 0; return; }   // standing, or this gait is switched off
 
     float prev = S.hoofPhase;
     S.hoofPhase += dt / stride;
@@ -1323,10 +1328,11 @@ static void Doors(int ped, float dt) {
 }
 
 // Horse dropping down a ledge or landing a jump: from about knee height up, heavier the further it drops.
-static void HorseDrop(float& minVz, float vz) {
+// bigOnly (this gait is switched off): only real falls and slides down a slope, from about 1.3 m (5 m/s).
+static void HorseDrop(float& minVz, float vz, bool bigOnly) {
     if (vz < minVz) minVz = vz;
     if (vz > -0.6f) {
-        if (minVz < -2.5f) {
+        if (minVz < (bigOnly ? -5.f : -2.5f)) {
             float a = std::clamp(0.40f + (-minVz - 2.5f) / 6.f, 0.40f, 1.0f);
             AddPulse(a * 0.3f, a * 0.6f, 0.04f, cfg.horse * cfg.landing, 4.f);
             AddPulse(a, a * 0.35f, 0.12f + a * 0.2f, cfg.horse * cfg.landing, 2.2f);
@@ -1636,11 +1642,12 @@ static void Tick(float dt) {
                 S.river = IsRiverZone(Nat<uint32_t>(N::GET_WATER_MAP_ZONE_AT_COORDS, p.x, p.y, p.z));
             }
             S.waterZoneT -= dt;
-            WaterRumble(S.mountWater, horseSpeed, S.river, true, dt);
+            bool gaitOn = HorseGaitOn(horseSpeed);
+            if (gaitOn) WaterRumble(S.mountWater, horseSpeed, S.river, true, dt);   // wading counts as riding at that gait
             ScanSnow(mount, dt);
             HorseRumble(horseSpeed, dt);
             Vec3 v = Nat<Vec3>(N::GET_ENTITY_VELOCITY, mount, 0);
-            HorseDrop(S.mountMinVz, v.z);
+            HorseDrop(S.mountMinVz, v.z, !gaitOn);
             // running into a tree / rock / wall: the speed collapses in a fraction of a second
             float decel = (S.prevHorseSpeed - horseSpeed) / std::max(dt, 0.001f);
             if (S.prevHorseSpeed > 4.f && decel > 22.f && S.crashCooldown <= 0.f
@@ -1655,7 +1662,7 @@ static void Tick(float dt) {
             if (mount == S.mountHandle && S.mountHealth >= 0 && S.mountHealth - mhp >= 5)
                 AddPulse(0.65f, 0.25f, 0.20f, cfg.horse * cfg.damage, 2.2f);
             S.mountHandle = mount; S.mountHealth = mhp;
-            if (Nat<int>(N::IS_CONTROL_JUST_PRESSED, 0, INPUT_HORSE_SPRINT)) AddPulse(0.20f, 0.14f, 0.04f, cfg.horse, 3.5f);   // spur kick
+            if (gaitOn && Nat<int>(N::IS_CONTROL_JUST_PRESSED, 0, INPUT_HORSE_SPRINT)) AddPulse(0.20f, 0.14f, 0.04f, cfg.horse, 3.5f);   // spur kick
         }
         S.noBoneStep = 0;
     } else {
