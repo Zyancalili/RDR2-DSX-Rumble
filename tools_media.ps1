@@ -88,7 +88,7 @@ Draw-Scene $g 1300 372 1010 300 70 300
 Text $g 'CONTROLLER RUMBLE' (F 50 'Bold') $cream 60 100 1100 90 'Near' $true
 $g.DrawLine((New-Object System.Drawing.Pen (C 200 245 230 200), 2), 66, 190, 640, 190)
 Text $g 'Feel every step, hoofbeat and shot on your controller' (F 24 'Italic') $cream 64 200 1000 50
-Text $g 'DualSense and Xbox  -  best with a DualSense: adaptive triggers and lightbar' (F 17 'Bold' 'Segoe UI') $dim 66 250 1000 40
+Text $g 'DualSense (with or without DSX) and Xbox  -  adaptive triggers and lightbar on the DualSense' (F 17 'Bold' 'Segoe UI') $dim 66 250 1000 40
 Text $g $version (F 18 'Bold' 'Segoe UI') $cream 0 330 1280 40 'Far'
 Save $bmp $g 'banner_1300x372.png'
 
@@ -98,7 +98,7 @@ Draw-Scene $g 1920 1080 960 760 150 800
 Text $g 'CONTROLLER RUMBLE' (F 92 'Bold') $cream 0 170 1920 160 'Center' $true
 $g.DrawLine((New-Object System.Drawing.Pen (C 200 245 230 200), 3), 560, 320, 1360, 320)
 Text $g 'Feel every step, hoofbeat and shot on your controller' (F 46 'Italic') $cream 0 330 1920 80 'Center'
-Text $g 'Best with a DualSense  -  works with Xbox controllers too' (F 28 'Bold' 'Segoe UI') $dim 0 410 1920 50 'Center'
+Text $g 'Best with a DualSense, with or without DSX  -  works with Xbox controllers too' (F 28 'Bold' 'Segoe UI') $dim 0 410 1920 50 'Center'
 Text $g $version (F 30 'Bold' 'Segoe UI') $cream 0 1010 1880 60 'Far'
 Save $bmp $g '1_cover.png'
 
