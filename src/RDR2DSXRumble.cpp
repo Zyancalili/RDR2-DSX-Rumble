@@ -77,12 +77,18 @@ static HMODULE            g_module;
 #define MOD_VER_MAJOR 1
 #define MOD_VER_MINOR 8
 #define MOD_VER_PATCH 0
+// DualSense Native edition (branch dualsense-native): always without DSX, own update channel (version_native.txt)
+#define DUALSENSE_NATIVE 1
 // Update check: the tag of the latest GitHub release (tags look like v1.6 / v1.6.1).
 #define UPDATE_HOST L"api.github.com"
 #define UPDATE_PATH L"/repos/Zyancalili/RDR2-DSX-Rumble/releases/latest"
 // Fallback when the API says no (it allows 60 requests an hour per IP). v1.6 and older read only this file.
 #define UPDATE_TXT_HOST L"raw.githubusercontent.com"
+#if DUALSENSE_NATIVE
+#define UPDATE_TXT_PATH L"/Zyancalili/RDR2-DSX-Rumble/main/version_native.txt"
+#else
 #define UPDATE_TXT_PATH L"/Zyancalili/RDR2-DSX-Rumble/main/version.txt"
+#endif
 typedef int (*fnWorldGetAll)(int* arr, int size);
 static fnWorldGetAll      shAllPeds, shAllObjects;
 
@@ -323,7 +329,7 @@ static void LoadConfig() {
     c.fireAtBreak     = IniI("DSX", "FireAtBreakPoint", 0) != 0;
     c.breakAdjust     = std::clamp(IniF("DSX", "BreakPointAdjust", 0), -30.f, 30.f) / 100.f;
     c.lightbar        = IniI("DSX", "Lightbar", 1) != 0;
-    c.direct          = IniI("DSX", "DirectDualSense", 1) != 0;   // DualSense Native edition: on by default
+    c.direct          = DUALSENSE_NATIVE || IniI("DSX", "DirectDualSense", 0) != 0;   // Native edition: always without DSX
     cfg = c;
 }
 
@@ -588,7 +594,7 @@ namespace Pad {
             if (!warned) {
                 warned = true;
                 if (denied) Log("pad: a DualSense is connected but cannot be opened (error %lu). HidHide or another tool hides it from the game: "
-                                "add RDR2.exe to HidHide's allowed applications, or switch 'DualSense without DSX' off in F11.", deniedErr);
+                                "add RDR2.exe to HidHide's allowed applications, and close DSX.", deniedErr);
                 else        Log("pad: no DualSense found for the direct output (%d HID devices seen). If it is connected, something hides it "
                                 "from the game (HidHide or Steam Input). Rumble falls back to XInput; adaptive triggers and lightbar are off.", seen);
                 Log("pad: device lists: SetupAPI %d, config manager %d", setupApi, cmApi);
@@ -609,7 +615,8 @@ namespace Pad {
             for (int i = 0; i < 4; i++) if (xget(i, &s) == 0) { if (xuser != i) Log("pad: Xbox controller (XInput user %d)", i); xuser = i; return; }
         }
         static bool warned = false;
-        if (!warned) { warned = true; Log("pad: no controller found yet - start DSX (DualSense) or plug in an Xbox controller"); }
+        if (!warned) { warned = true; Log(cfg.direct ? "pad: no controller found yet - connect the DualSense (USB or Bluetooth) or an Xbox controller"
+                                                    : "pad: no controller found yet - start DSX (DualSense) or plug in an Xbox controller"); }
         xuser = -1;
     }
 
@@ -2048,7 +2055,7 @@ static void ScriptMain() {
     Log("RDR2 Controller Rumble " MOD_VERSION " - script started (backend=%s, dsx=%d, output=%s)", cfg.backend ? "Direct" : "Game",
         (int)cfg.dsx, cfg.direct ? "Direct" : "DSX");
     InitWeapons();
-    if (DSX::sock == INVALID_SOCKET) DSX::Open();   // the pad thread may have opened it for the start screen
+    if (!cfg.direct && DSX::sock == INVALID_SOCKET) DSX::Open();   // the pad thread may have opened it for the start screen
     StartUpdateCheck();
     FILETIME iniT = IniTime();
     DWORD lastCheck = GetTickCount();
@@ -2069,7 +2076,7 @@ static void ScriptMain() {
                 iniT = t;
                 int oldPort = cfg.dsxPort;
                 LoadConfig();
-                if (cfg.dsxPort != oldPort) { DSX::Close(); DSX::Open(); }
+                if (!cfg.direct && cfg.dsxPort != oldPort) { DSX::Close(); DSX::Open(); }
                 S.sentValid = false; S.rgb[0] = -1;
                 Log("config reloaded");
             }

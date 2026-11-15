@@ -246,7 +246,6 @@ static MenuItem g_items[] = {
     {"Rumble in cutscenes",    "General", "CutsceneRumble",     1, 1},
     {"Adaptive triggers",      "DSX",     "AdaptiveTriggers",   1, 1},
     {"Lightbar",               "DSX",     "Lightbar",           1, 1},
-    {"DualSense without DSX",  "DSX",     "DirectDualSense",    1, 1},
     {"Menu clicks",            "Menu",    "ButtonRumble",       1, 1},
     {"Mute when alt-tabbed",   "General", "MuteWhenUnfocused",  1, 1},
     {"Check for updates",      "General", "CheckForUpdates",    1, 1},
@@ -682,14 +681,15 @@ static DWORD WINAPI UpdateThread(LPVOID) {
         // Latest GitHub release: {"...","tag_name":"v1.6.1",...}. The API wants a User-Agent (set by WinHttpOpen).
         DWORD code = 0;
         const char* from = "release";
-        std::string body = HttpGet(s, UPDATE_HOST, UPDATE_PATH, code);
+        // Native edition: its own version file only; GitHub's latest release is the regular (DSX) edition
+        std::string body = DUALSENSE_NATIVE ? std::string() : HttpGet(s, UPDATE_HOST, UPDATE_PATH, code);
         size_t at = body.find("\"tag_name\"");
         if (at != std::string::npos) at = body.find('"', body.find(':', at));   // opening quote of the value
         const char* b = at != std::string::npos ? body.c_str() + at + 1 : nullptr;
         if (!b) {   // API limit hit or GitHub down: version.txt holds the same number ("1.6.1")
             from = "version.txt";
             body = HttpGet(s, UPDATE_TXT_HOST, UPDATE_TXT_PATH, code);
-            if (!body.empty()) b = body.c_str();
+            if (!body.empty() && code == 200) b = body.c_str();
         }
         if (b) {
             int maj = 0, min = 0, pat = 0;
