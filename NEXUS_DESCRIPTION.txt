@@ -9,10 +9,11 @@
 
 [size=4][b]What's new in v1.8.0[/b][/size]
 [list]
+[*][b]DualSense without DSX:[/b] new optional file [i]DualSense Native[/i]. Rumble, adaptive triggers and lightbar go straight to the controller, with Steam Input on (see Alternative installation)
+[*][b]PlayStation buttons[/b] in game with the Native file (needs Lenny's Mod Loader)
 [*][b]Footsteps dropdown in F11:[/b] switch footsteps off, set their strength, and turn them on or off for walking, running and sprinting on their own
 [*]Walking no longer rumbles by default, on foot and on horseback (switch it back on in the F11 dropdowns)
-[*]The Advanced settings page is more compact
-[*][b]New optional file: DualSense Native[/b] - DualSense without DSX, with PlayStation buttons (see Alternative installation)
+[*]F11 dropdowns open one at a time, and the Advanced settings page is more compact
 [/list]
 
 [size=4][b]Features[/b][/size]
