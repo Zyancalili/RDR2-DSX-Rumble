@@ -128,9 +128,9 @@ Grid 'Rumble that makes sense' 'Every effect is tuned to how it would feel - sna
     @('Fistfights', 'A hard smack when you take a punch, a knuckle thud when yours lands.'),
     @('Animals', 'Dog and wolf bites that tug, bear mauls, bull rams - and the growl when a bear roars.'),
     @('Water and swimming', 'Rivers push against you; wading grows with your pace. Rhythmic swim strokes.'),
-    @('World and cutscenes', 'Door slams, carrying bodies, sliding, falls, wagons. Cutscene gunfights too.'),
-    @('F11 settings menu', 'Tune it in game, plus an Advanced page to switch every effect on or off.'),
-    @('Health', 'A heartbeat at low health, a jolt for every wound. Light clicks in menus.')
+    @('World and cutscenes', 'Doors, carrying bodies, eating and looting, falls, wagons. Cutscene gunfights.'),
+    @('F11 settings menu', 'Tune it in game. Advanced tabs switch every effect on or off.'),
+    @('Lightbar and health', 'Lightbar green in nature, orange in town and desert, red in fights. A heartbeat when low.')
 ) '2_rumble.png'
 
 # ---------------------------------------------------------------------------- 4. adaptive triggers chart

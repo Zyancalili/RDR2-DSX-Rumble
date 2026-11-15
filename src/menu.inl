@@ -14,6 +14,7 @@ namespace UI {
     constexpr uint64_t SET_MOUSE_CURSOR_THIS_FRAME = 0xF12E4CCAF249DC10;
 
     static float screenW = 1920.f, screenH = 1080.f, aspect = 16.f / 9.f;
+    static int   rects = 0;           // rects drawn this frame (RDR2 drops everything past ~400)
 
     static void UpdateScreen() {
         screenW = (float)GetSystemMetrics(SM_CXSCREEN);
@@ -25,6 +26,7 @@ namespace UI {
     // x, y, w, h in 0..1 screen units, (x, y) = top-left
     static void Rect(float x, float y, float w, float h, int r, int g, int b, int a) {
         NatV(DRAW_RECT, x + w * 0.5f, y + h * 0.5f, w, h, r, g, b, a, 1, 1);
+        rects++;
     }
 
     enum Align { Left, Center, Right };
@@ -54,10 +56,11 @@ namespace UI {
     }
 
     // The dusk backdrop used by the Nexus art: red-to-amber sky, a low sun with rumble rings, mesa silhouette.
-    static void Backdrop(float x, float y, float w, float h, float sunX, float sunR, bool rings) {
+    // lite: fewer bands and columns and no sun (~40 rects instead of ~290), for pages that need the rect budget
+    static void Backdrop(float x, float y, float w, float h, float sunX, float sunR, bool rings, bool lite = false) {
         struct Stop { float t; int r, g, b; };
         static const Stop stops[] = { {0.f, 30, 6, 6}, {0.50f, 120, 22, 12}, {0.82f, 215, 95, 25}, {1.f, 120, 45, 15} };
-        const int bands = 28;
+        const int bands = lite ? 14 : 28;
         for (int i = 0; i < bands; i++) {
             float t = (i + 0.5f) / bands;
             int k = 0; while (k < 2 && t > stops[k + 1].t) k++;
@@ -69,9 +72,11 @@ namespace UI {
         }
         float horizon = y + h * 0.90f;
         float cx = x + w * sunX, cy = horizon;
-        for (int i = 3; i >= 1; i--) Circle(cx, cy, sunR * (1.f + i * 0.45f), 255, 190, 90, 22);   // glow
-        Circle(cx, cy, sunR, 255, 200, 120, 255);
-        if (rings) {   // rumble rings: dotted arcs above the sun
+        if (!lite) {
+            for (int i = 3; i >= 1; i--) Circle(cx, cy, sunR * (1.f + i * 0.45f), 255, 190, 90, 22);   // glow
+            Circle(cx, cy, sunR, 255, 200, 120, 255);
+        }
+        if (rings && !lite) {   // rumble rings: dotted arcs above the sun
             for (int ring = 1; ring <= 3; ring++) {
                 float rr = sunR * (1.f + ring * 0.55f);
                 int dots = 18 + ring * 8;
@@ -88,7 +93,7 @@ namespace UI {
         static const float pts[][2] = { {0.f, -0.02f}, {0.08f, -0.015f}, {0.14f, 0.025f}, {0.22f, 0.027f}, {0.25f, 0.f},
             {0.34f, -0.005f}, {0.37f, 0.012f}, {0.41f, 0.006f}, {0.60f, 0.f}, {0.64f, 0.04f}, {0.74f, 0.043f},
             {0.77f, 0.f}, {0.84f, -0.008f}, {0.92f, 0.008f}, {1.f, 0.004f} };
-        const int cols = 72;
+        const int cols = lite ? 24 : 72;
         for (int c = 0; c < cols; c++) {
             float fx = (c + 0.5f) / cols;
             int k = 0; while (k < 13 && fx > pts[k + 1][0]) k++;
@@ -111,34 +116,114 @@ struct MenuItem {
     int val;
 };
 
-// 10x10 pixel icons for the advanced page, in the pixel style of the Nexus art.
-// '#' = main colour, '+' = amber accent, 'r' = red, '.' = empty
-static const struct { const char* key; const char* px; } g_icons[] = {
-    {"Footsteps",       "...###...." "...###...." "...###...." "...###...." "...####..." "...######." "..#######." "..########" "..++++++++" ".........."},
-    {"HorseRumble",     ".##....##." ".#+....+#." "##......##" "#+......+#" "##......##" ".##....##." ".###..###." "..######.." "...####..." ".........."},
-    {"Weapons",         ".........." "..#######+" ".#######.." ".##++##..." ".#####...." ".##..#...." ".##.##...." "###......." "###......." ".........."},
-    {"Reload",          ".........." ".++.++.++." ".++.++.++." ".##.##.##." ".##.##.##." ".##.##.##." ".##.##.##." ".##.##.##." ".##.##.##." ".........."},
-    {"WeaponSwitch",    "...####..." ".##.##.##." ".#..##..#." "#...##...#" "##########" "#+++##...#" ".#++##..#." ".##+##.##." "...####..." ".........."},
-    {"Melee",           ".........." "..######.." ".#+#+#+##." ".########." ".#+#+#+##." ".########." ".#####++#." "..######.." "...####..." "...####..."},
-    {"Damage",          "....r....." "....r....." "...rrr...." "...rrr...." "..rrrrr..." ".rr#rrrr.." ".r##rrrr.." ".rrrrrrr.." "..rrrrr..." "...rrr...."},
-    {"Heartbeat",       ".........." ".rr...rr.." "rrrr.rrrr." "r#rrrrrrr." "rrrrrrrrr." ".rrrrrrr.." "..rrrrr..." "...rrr...." "....r....." ".........."},
-    {"Animals",         ".........." "..##..##.." "..##..##.." "##......##" "##.####.##" "..######.." ".########." ".########." "..######.." ".........."},
-    {"Water",           ".........." "..##...##." ".#..#.#..#" "#....#...." ".........." "..++...++." ".+..+.+..+" "+....+...." ".........." ".........."},
-    {"Swimming",        "......##.." ".....####." "......##.." "##........" "..###....." "....##...." "..++...++." ".+..+.+..+" "+....+...." ".........."},
-    {"Doors",           ".########." ".#......#." ".#.####.#." ".#.#..#.#." ".#.####.#." ".#.....+#." ".#.####.#." ".#.#..#.#." ".#.####.#." ".########."},
-    {"Carry",           "....++...." "...#..#..." "...####..." "..######.." ".########." ".###++###." ".########." ".########." "..######.." ".........."},
-    {"Sliding",         "#........." "#+........" "##+......." "###+......" "####+....." "#####+...." "######+..." "#######+.." "##########" ".........."},
-    {"Landing",         "....##...." "....##...." "....##...." "..######.." "...####..." "....##...." ".........." "+.+.++.+.+" "##########" ".........."},
-    {"Vehicle",         "...####..." ".##....##." ".#+.##.+#." "#..+##+..#" "#.##++##.#" "#.##++##.#" "#..+##+..#" ".#+.##.+#." ".##....##." "...####..."},
-    {"CutsceneRumble",  ".........." "#.#.#.#.#." "##########" "#++++++++#" "#++++++++#" "#++++++++#" "##########" "#.#.#.#.#." ".........." ".........."},
-    {"ButtonRumble",    ".#........" ".##......." ".#+#......" ".#++#....." ".#+++#...." ".#++++#..." ".#++###..." ".###.##..." ".#....##.." "......##.."},
-    {"SplashShotRumble","....#....." ".#..#..#.." "..#.#.#..." "...+++...." "####+####." "...+++...." "..#.#.#..." ".#..#..#.." "....#....." ".........."},
-    {"AdaptiveTriggers",".........." "...####..." "..#++++#.." ".#++++++#." ".#++++++#." ".#++++++#." ".#++++++#." ".########." ".........." ".........."},
-    {"GallopingTriggersOnHorse", ".........." "...####..." "+.#++++#.+" ".+#++++#+." "+.#++++#.+" "..#++++#.." "..######.." ".##....##." ".#+....+#." ".........."},
-    {"Lightbar",        ".........." "+...+...+." ".+..+..+.." "..+.+.+..." ".........." "##########" "#++++++++#" "##########" ".........." ".........."},
+// Title-card art for the advanced pages: one 24x8 pixel scene per setting, drawn on the right of its card
+// (forest, cabin and dusk colours, chunky like the menu backdrop). One letter = one pixel, '.' = empty.
+// RDR2 draws at most ~400 rects per frame, so every scene stays under ~32 runs of one colour per row.
+static void Palette(char ch, int& r, int& g, int& b) {
+    switch (ch) {
+        case 'k': r = 16;  g = 12;  b = 12;  break;   // near black
+        case 'n': r = 28;  g = 38;  b = 46;  break;   // night
+        case 'd': r = 58;  g = 36;  b = 28;  break;   // dark wood / earth
+        case 'b': r = 112; g = 66;  b = 42;  break;   // wood
+        case 'B': r = 158; g = 98;  b = 58;  break;   // light wood
+        case 'g': r = 34;  g = 64;  b = 52;  break;   // pine shadow
+        case 'G': r = 62;  g = 104; b = 72;  break;   // pine
+        case 'L': r = 108; g = 150; b = 92;  break;   // leaf
+        case 'm': r = 76;  g = 110; b = 108; break;   // mist
+        case 's': r = 128; g = 162; b = 150; break;   // teal sky
+        case 'S': r = 186; g = 206; b = 182; break;   // pale sky
+        case 'w': r = 44;  g = 84;  b = 104; break;   // deep water
+        case 'W': r = 98;  g = 146; b = 164; break;   // light water
+        case 'o': r = 214; g = 112; b = 48;  break;   // dusk orange
+        case 'O': r = 250; g = 175; b = 80;  break;   // amber
+        case 'y': r = 255; g = 222; b = 140; break;   // lamp light
+        case 'c': r = 238; g = 226; b = 198; break;   // cream
+        case 'r': r = 150; g = 34;  b = 28;  break;   // blood
+        case 'R': r = 222; g = 72;  b = 52;  break;   // bright red
+        case 'e': r = 96;  g = 96;  b = 92;  break;   // stone
+        case 'E': r = 150; g = 148; b = 140; break;   // light stone
+        case 'p': r = 74;  g = 48;  b = 70;  break;   // dusk purple
+        case 'u': r = 196; g = 120; b = 70;  break;   // sand
+        default:  r = g = b = -1;
+    }
+}
+
+static const struct { const char* key; const char* px; } g_scenes[] = {
+    // --- On foot ---
+    {"Footsteps",
+     "ssssssssssssssssssssssss" "sssssgssssssssssgsssssss" "mmmmgggmmmmmmmmgggmmmmmm" "gggggggggggggggggggggggg"
+     "GGGGGbbbbbbbbbbbbbGGGGGG" "GGGbbbdbbbbbdbbbbbbbGGGG" "GGbbbbbbbdbbbbbbdbbbbbGG" "GGGbbbbbbbbbbbbbbbbbbGGG"},
+    {"Sliding",
+     "Gsssssssssssssssssssssss" "bGGsssssssssssssssssssss" "bbbGGsssssssssssssssssss" "bbbbbGGsssssssEsssssssss"
+     "bbbbbbbGGsssssEEssssssss" "bbbbbbbbbGGsssssssEsssss" "bbbbbbbbbbbGGsssssssssss" "bbbbbbbbbbbbbGGGGGGGGGGG"},
+    {"Landing",
+     "ssssssssssssssssssssssss" "eeeeeeessssssssssccsssss" "eEeeeeesssssssssBBBBssss" "eeeeeeessssssssssddsssss"
+     "eeeeeeesssssssssdssdssss" "eeeeeeesssssssssssssssss" "eeeeeeemmmmmmmmmmmmmmmmm" "eeeeeeeGGGGGGGGGGGGGGGGG"},
+    {"Swimming",
+     "SSSSSSSSSSSSSSSSSSSSSSSS" "ssssssssssssssssssssssss" "gggggggggmmmmmmmmmgggggg" "WWWWWWWWWWWWWWWccWWWWWWW"
+     "WWWWWWWWWWWdddWWcWWWWWWW" "wwwwwwwWWWWdcdWWWWWwwwww" "wwwWWwwwwwwwwwwwwwwWWwww" "wwwwwwwwwwwwwwwwwwwwwwww"},
+    {"Water",
+     "ssssssssssssssssssssssss" "sssssssssggsssssssssssss" "mmmmmmmmggggmmmmmmmmmmmm" "GGGGGGGGGGGGGGGGGGGGGGGG"
+     "WWWWWWWWWWWWWWWWWWWLWWWW" "wwwWWWWwwwwwwwwwwwwLwLww" "wwwwwwwwwwWWWWwwwwwLwLww" "wwwwwwwwwwwwwwwwwwwwwwww"},
+    {"Doors",
+     "sssssssssssbbbbbbsssssss" "ssssssssssbbbbbbbbssssss" "sssssssssbbbbbbbbbbsssss" "GGGGGGGGGBByyBdddBBGGGGG"
+     "GGGGGGGGGBByyBdOdBBGGGGG" "GGGGGGGGGBBBBBdddBBGGGGG" "bbbbbbbbbbbbbbbbbbbbbbbb" "dddddddddddddddddddddddd"},
+    {"Carry",
+     "ssssssssssssssssssssssss" "sssssssssssssddsssssssss" "ssssssssssssBbbBssssssss" "mmmmmmmmmmmBBBBBBmmmmmmm"
+     "ggggggggggBBBBBBBBgggggg" "GGGGGGGGGGBBBBBBBBGGGGGG" "GGGGGGGGGGGBBBBBBGGGGGGG" "bbbbbbbbbbbbbbbbbbbbbbbb"},
+    {"Items",
+     "nnnnnnnnnnnnnnnnnnnnnnnn" "nnnnnnnnnnnnnnnnnnnnnnnn" "nnnnnnnnnnnneeeeennnnnnn" "nnnnnnnnnnnneeeeennnnnnn"
+     "nnnnnnnnnnnnnoOonnnnnnnn" "gggggggggggoOyOogggggggg" "ddddddddddbbbbbbbddddddd" "dddddddddddddddddddddddd"},
+    // --- Fights and riding ---
+    {"Weapons",
+     "pppppppppppppppppppppppp" "oooooooooooooooooooooooo" "ooooooooooyOkkkkkkkkoooo" "OOOOOOOOOOOOkkkkkkkkOOOO"
+     "OOOOOOOOOOOOOOOkkOkkOOOO" "uuuuuuuuuuuuuuuuuukkkuuu" "uuuuuuuuuuuuuuuuuukkkuuu" "dddddddddddddddddddddddd"},
+    {"Reload",
+     "dddddddddddddddddddddddd" "ddddddddddddddyddyddyddd" "ddddddddddddddOddOddOddd" "ddddddddddddddOddOddOddd"
+     "ddddddddddddddbddbddbddd" "bbbbbbbbbbbbbbbbbbbbbbbb" "BBBBBBBBBBBBBBBBBBBBBBBB" "bbbbbbbbbbbbbbbbbbbbbbbb"},
+    {"WeaponSwitch",
+     "dddddddddddddddddddddddd" "ddddddddddkkkkkkkkkkkddd" "ddddddddddddddkkkkbbbbdd" "dddddddddddddddddkbbbbbd"
+     "dddddddddddddddddddddddd" "ddddddddddddkkkkkkkddddd" "ddddddddddddddddkbbddddd" "bbbbbbbbbbbbbbbbbbbbbbbb"},
+    {"Melee",
+     "pppppppppppppppppppppppp" "pppppppppppppypppppppppp" "pppppppuuuupyyypuuuupppp" "ppppppuuuuuyyOyyuuuuuppp"
+     "pppppppuuuupyyypuuuupppp" "pppppppppppppypppppppppp" "dddddddddddddddddddddddd" "dddddddddddddddddddddddd"},
+    {"Damage",
+     "kkkkkkkkkkkkkkkkkkkkkkkk" "kkkkkkkkkkkkkkkkkrkkkkkk" "kkkkkkkkkkkkkkkkrRkkkkkk" "kkkkkkkkkkkkkrRRrkkkrkkk"
+     "kkkkkkkkkkkkrRRrkkkkkkkk" "kkkkkkkkkkkrRrkkkkrkkkkk" "kkkkkkkkkkrrkkkkkkkkkkkk" "kkkkkkkkkkkkkkkkkkkkkkkk"},
+    {"Animals",
+     "nnnnnnnnnnnnnnnnnnccnnnn" "nnnnnnnnnnnnnnnnnccccnnn" "nnnnnnnnnnnnnnnnnnccnnnn" "nnnnnnnnnnnnkknnnnnnnnnn"
+     "nnnnnnnnnnnnkkknnnnnnnnn" "nnnnnnnnnnnkkkkkkkknnnnn" "ggggggggggggkgggggkggggg" "gggggggggggggggggggggggg"},
+    {"HorseRumble",
+     "pppppppppppppppppppppppp" "oooooooooooooooooooooooo" "OOOOOOOOOOOOOOOOOkkOOOOO" "OOOOOOOOOOOOOOOOkkOOOOOO"
+     "uuuuuuuuuukkkkkkkkuuuuuu" "uuuuuuuuukkkkkkkkkuuuuuu" "ddddddddddkddkddkdkddddd" "dddddddddddddddddddddddd"},
+    {"Vehicle",
+     "ssssssssssssssssssssssss" "ssssssssscccccccccssssss" "sssssssscccccccccccsssss" "ssssssssbbbbbbbbbbbsssss"
+     "GGGGGGGGddddGGGGGddddGGG" "GGGGGGGGdBBdGGGGGdBBdGGG" "bbbbbbbbddddbbbbbddddbbb" "bbbbbbbbbbbbbbbbbbbbbbbb"},
+    // --- Extras ---
+    {"Heartbeat",
+     "kkkkkkkkkkkkkkkkkkkkkkkk" "kkkkkkkkkkkkkrrkrrkkkkkk" "kkkkkkkkkkkkrRrrrrrkkkkk" "kkkkkkkkkkkkrrrrrrrkkkkk"
+     "kkkkkkkkkkkkkrrrrrkkkkkk" "kkkkkkkkkkkkkkrrrkkkkkkk" "kkkkOkkkkkkkkkkrkkkkkkkk" "OOOOkOOOOOOOOOOOOOOOOOOO"},
+    {"CutsceneRumble",
+     "kkkkkkkkkkkkkkkkkkkkkkkk" "oooooooooooooooooooooooo" "OOOOOOOOOOOOOOOOyyOOOOOO" "OOOOOOOOOOOOOOOyyyyOOOOO"
+     "uuuuuuuuddddduuuuuuudddd" "dddddddddddddddddddddddd" "kkkkkkkkkkkkkkkkkkkkkkkk" "kkkkkkkkkkkkkkkkkkkkkkkk"},
+    {"ButtonRumble",
+     "dddddddddddddddddddddddd" "ddddddddddccccccccccdddd" "ddddddddddcBBBBBccccdddd" "ddddddddddccccccccOcdddd"
+     "ddddddddddcBBBBccOOOdddd" "ddddddddddccccccccOcdddd" "ddddddddddccccccccccdddd" "dddddddddddddddddddddddd"},
+    {"SplashShotRumble",
+     "kkkkkkkkkkkkkkkkkkkkkkkk" "kkkkkkkkkkkkkkkOkkkkkkkk" "kkkkkkkkkkkkkOkykOkkkkkk" "kkkkkkkkkkkkkkyyykkkkkkk"
+     "kkkkkkkkkkkOyyyyyyyOkkkk" "kkkkkkkkkkkkkkyyykkkkkkk" "kkkkkkkkkkkkkOkykOkkkkkk" "kkkkkkkkkkkkkkkOkkkkkkkk"},
+    {"AdaptiveTriggers",
+     "nnnnnnnnnnnnnnnnnnnnnnnn" "nnnnnnnnnnnnneeeeeennnnn" "nnnnnnnnnnnneEEEEEEennnn" "nnnnnnnnnnnneEEEEEEennnn"
+     "nnnnnnnnnnnneEOOOOEennnn" "nnnnnnnnnnnneeeeeeeennnn" "nnnnnnnnnnnnnnnnnnnnnnnn" "nnnnnnnnnnnnnnnnnnnnnnnn"},
+    {"GallopingTriggersOnHorse",
+     "ssssssssssssssssssssssss" "sssssssssssssssssskkssss" "sssssssssssssssskkkkssss" "sssssssssskkkkkkkkksssss"
+     "ssssssssskkkkkkkkkssssss" "uuuuuuuukuuuuuuuuuukuuuu" "uuEuEuukuuuuuuuuuuuukuuu" "uuuuuuuuuuuuuuuuuuuuuuuu"},
+    {"Lightbar",
+     "nnnnnnnnnnnnnnnnnnnnnnnn" "nnnnnnnnnnnnnnnkknnnnnnn" "nnnnnnnnnnnnnnkkkknnnnnn" "nnnnnnnnnnnnnoyyyyonnnnn"
+     "nnnnnnnnnnnnOoyyyyoOnnnn" "nnnnnnnnnnnnnoyyyyonnnnn" "nnnnnnnnnnnnnnkkkknnnnnn" "nnnnnnnnnnnnnnnnnnnnnnnn"},
 };
-static const char* IconFor(const char* key) {
-    for (auto& ic : g_icons) if (key && !strcmp(ic.key, key)) return ic.px;
+static const char* SceneFor(const char* key) {
+    for (auto& s : g_scenes) if (key && !strcmp(s.key, key)) return s.px;
     return nullptr;
 }
 
@@ -164,24 +249,30 @@ static MenuItem g_items[] = {
     {"Advanced settings",      nullptr,   nullptr,              3},
     {"Test rumble",            nullptr,   nullptr,              3},
     {"Close",                  nullptr,   nullptr,              3},
+    // Advanced settings: every effect on its own switch ([Effects] in the ini, the strengths stay in
+    // [Rumble]), on three tabs - each kind 5 row starts the next one. 8 cards a tab keeps the art in budget.
     {"",                       nullptr,   nullptr,              5},
-    // advanced page: every effect on its own switch ([Effects] in the ini, the strengths stay in [Rumble])
     {"Footsteps",              "Effects", "Footsteps",          1, 1},
-    {"Horse",                  "Rumble",  "HorseRumble",        1, 1},
+    {"Sliding",                "Effects", "Sliding",            1, 1},
+    {"Falls and jumps",        "Effects", "Landing",            1, 1},
+    {"Swimming",               "Effects", "Swimming",           1, 1},
+    {"Water",                  "Effects", "Water",              1, 1},
+    {"Doors",                  "Effects", "Doors",              1, 1},
+    {"Carrying",               "Effects", "Carry",              1, 1},
+    {"Eating and items",       "Effects", "Items",              1, 1},
+    {"Back",                   nullptr,   nullptr,              3},
+    {"",                       nullptr,   nullptr,              5},
     {"Gunshots",               "Effects", "Weapons",            1, 1},
     {"Reloading",              "Effects", "Reload",             1, 1},
     {"Weapon switch",          "Effects", "WeaponSwitch",       1, 1},
     {"Fistfights",             "Effects", "Melee",              1, 1},
     {"Getting hurt",           "Effects", "Damage",             1, 1},
-    {"Heartbeat",              "Effects", "Heartbeat",          1, 1},
     {"Animal attacks",         "Effects", "Animals",            1, 1},
-    {"Water",                  "Effects", "Water",              1, 1},
-    {"Swimming",               "Effects", "Swimming",           1, 1},
-    {"Doors",                  "Effects", "Doors",              1, 1},
-    {"Carrying",               "Effects", "Carry",              1, 1},
-    {"Sliding",                "Effects", "Sliding",            1, 1},
-    {"Falls and jumps",        "Effects", "Landing",            1, 1},
+    {"Horse",                  "Rumble",  "HorseRumble",        1, 1},
     {"Wagons",                 "Effects", "Vehicle",            1, 1},
+    {"Back",                   nullptr,   nullptr,              3},
+    {"",                       nullptr,   nullptr,              5},
+    {"Heartbeat",              "Effects", "Heartbeat",          1, 1},
     {"Cutscenes",              "General", "CutsceneRumble",     1, 1},
     {"Menu clicks",            "Menu",    "ButtonRumble",       1, 1},
     {"Startup shot",           "Startup", "SplashShotRumble",   1, 1},
@@ -190,12 +281,14 @@ static MenuItem g_items[] = {
     {"Lightbar",               "DSX",     "Lightbar",           1, 1},
     {"Back",                   nullptr,   nullptr,              3},
 };
+static const char* const kTabs[] = {"On foot", "Fights and riding", "Extras"};
+constexpr int kTabCount = 3;
 constexpr int kItems = sizeof g_items / sizeof g_items[0];
 
 static struct {
     bool  open = false, paused = false;
     bool  expanded = false;           // shortcut: one flag for all dropdowns, fine while "Horse" is the only one
-    int   page = 0;                   // 0 = settings, 1 = advanced
+    int   page = 0;                   // 0 = settings, 1..kTabCount = the advanced tabs
     int   sel = 0, hover = -1;
     float anim = 0.f;
     uint32_t prevPad = 0;
@@ -276,10 +369,11 @@ static void MenuOpen() {
 
 static void MenuPage(int p) {
     M.page = p;
-    MenuLoadValues();                 // both pages show some of the same keys
-    for (int i = 0; i < kItems; i++)  // advanced page: its first tile, back on page 1: the "Advanced settings" row
-        if (!Hidden(i) && (p == 1 || !strcmp(g_items[i].label, "Advanced settings"))) { M.sel = i; break; }
+    MenuLoadValues();                 // the pages share some keys
+    for (int i = 0; i < kItems; i++)  // a tab: its first card; back on the settings page: the "Advanced settings" row
+        if (!Hidden(i) && (p > 0 || !strcmp(g_items[i].label, "Advanced settings"))) { M.sel = i; break; }
 }
+static void MenuTab(int d) { MenuClick(); MenuPage((M.page - 1 + d + kTabCount) % kTabCount + 1); }
 
 // dir = -1 / +1 to change a value, 0 = activate (click / cross / enter)
 static void MenuChange(int i, int dir) {
@@ -323,93 +417,115 @@ static void MenuValueText(const MenuItem& it, char* out, size_t n) {
     }
 }
 
-// Layout (0..1 screen units). The settings page is a list, the advanced page a two-column grid of tiles.
-static constexpr float kPanelY = 0.04f, kRowsY = 0.185f;
+// Layout (0..1 screen units). The settings page is a list; the advanced tabs are wide title cards with art.
+static constexpr float kPanelY = 0.04f, kRowsY = 0.185f, kTabH = 0.040f;
 struct Cell { float x, y, w, h; };   // h = 0: not on screen
 static Cell  g_cell[kItems];
 static float g_rowsEnd;              // y just below the last row
 
 static float PanelW() { return 0.52f / UI::aspect * (16.f / 9.f) * 0.75f; }   // ~0.39 of the width on 16:9
+static void  RowsX(float& rx, float& rw) { float pw = PanelW(); rx = 0.5f - pw * 0.5f + pw * 0.06f; rw = pw * 0.88f; }
 
 static void Layout() {
-    float pw = PanelW(), rx = 0.5f - pw * 0.5f + pw * 0.06f, rw = pw * 0.88f, gap = 0.006f;
-    auto tile = [](int i) { return M.page == 1 && g_items[i].kind != 3; };
-    int rows = 0, col = 0;
-    for (int i = 0; i < kItems; i++) {
-        if (Hidden(i)) continue;
-        if (!tile(i) || col == 0) rows++;
-        col = tile(i) ? col ^ 1 : 0;
-    }
-    // rows shrink when the dropdown is open, so the panel always ends above 0.95
-    float step = std::min(M.page == 1 ? 0.060f : 0.045f, 0.725f / std::max(rows, 1)), h = step * 0.89f;
-    float cw = (rw - gap) * 0.5f;
-    int r = -1; col = 0;
-    for (int i = 0; i < kItems; i++) {
-        g_cell[i] = {0, 0, 0, 0};
-        if (Hidden(i)) continue;
-        if (!tile(i) || col == 0) r++;
-        g_cell[i] = tile(i) ? Cell{rx + col * (cw + gap), kRowsY + r * step, cw, h} : Cell{rx, kRowsY + r * step, rw, h};
-        col = tile(i) ? col ^ 1 : 0;
-    }
-    g_rowsEnd = kRowsY + rows * step;
+    float rx, rw; RowsX(rx, rw);
+    int rows = 0;
+    for (int i = 0; i < kItems; i++) rows += !Hidden(i);
+    bool adv = M.page > 0;
+    float top = adv ? kRowsY + kTabH + 0.012f : kRowsY;
+    // settings: rows shrink when the dropdown is open, so the panel always ends above 0.95
+    float step = adv ? 0.068f : std::min(0.045f, 0.725f / std::max(rows, 1)), h = step * (adv ? 0.91f : 0.89f);
+    int r = 0;
+    for (int i = 0; i < kItems; i++) g_cell[i] = Hidden(i) ? Cell{0, 0, 0, 0} : Cell{rx, top + r++ * step, rw, h};
+    g_rowsEnd = top + rows * step;
 }
 
-// Draws a 10x10 icon from g_icons, ph = height of one pixel. Runs of one colour are one rect.
-static void Icon(const char* px, float x, float y, float ph, bool on, bool sel) {
+// Tab t (0-based) of the advanced pages
+static Cell TabCell(int t) {
+    float rx, rw; RowsX(rx, rw);
+    float gap = 0.006f, w = (rw - gap * (kTabCount - 1)) / kTabCount;
+    return {rx + t * (w + gap), kRowsY, w, kTabH};
+}
+static int TabHit(float cx, float cy) {
+    for (int t = 0; M.page > 0 && t < kTabCount; t++) {
+        Cell c = TabCell(t);
+        if (cx >= c.x && cx <= c.x + c.w && cy >= c.y && cy <= c.y + c.h) return t;
+    }
+    return -1;
+}
+
+// A 24x8 scene from g_scenes, ph = height of one pixel. Runs of one colour are one rect. The first run of
+// each row reaches kScenePad pixels further left (free: still one rect), so the scene can fade into the card
+// over plain sky and ground.
+constexpr int kScenePad = 9;
+static void Scene(const char* px, float x, float y, float ph, bool on) {
     if (!px) return;
     float pxw = ph / UI::aspect;      // square pixels
-    for (int r = 0; r < 10; r++)
-        for (int c = 0; c < 10; ) {
-            char ch = px[r * 10 + c];
-            int n = 1; while (c + n < 10 && px[r * 10 + c + n] == ch) n++;
-            int R, G, B;
-            if (ch == '#')      { R = sel ? 255 : 245; G = sel ? 215 : 230; B = sel ? 160 : 200; }
-            else if (ch == '+') { R = 250; G = 175; B = 80; }
-            else if (ch == 'r') { R = 205; G = 55;  B = 45; }
-            else { c += n; continue; }
-            if (!on) { R = R * 2 / 5; G = G * 2 / 5; B = B * 2 / 5; }   // switched off: the icon goes dark
-            UI::Rect(x + c * pxw, y + r * ph, n * pxw, ph, R, G, B, 255);
+    for (int r = 0; r < 8; r++)
+        for (int c = 0; c < 24; ) {
+            char ch = px[r * 24 + c];
+            int n = 1; while (c + n < 24 && px[r * 24 + c + n] == ch) n++;
+            int R, G, B; Palette(ch, R, G, B);
+            if (R >= 0) {
+                if (!on) { int l = (R + G + B) / 3; R = (R + l) / 5; G = (G + l) / 5; B = (B + l) / 5; }   // switched off: dark, grey
+                float pad = c == 0 ? kScenePad * pxw : 0.f;
+                UI::Rect(x + c * pxw - pad, y + r * ph, n * pxw + pad + 0.0004f, ph + 0.0004f, R, G, B, 255);   // tiny overlap: no seams
+            }
             c += n;
         }
 }
 
 static void MenuDraw(float cursorX, float cursorY) {
     using namespace UI;
+    rects = 0;
     Layout();
+    bool adv = M.page > 0;
     float pw = PanelW();
     float px = 0.5f - pw * 0.5f, py = kPanelY;
     const float kPanelH = g_rowsEnd - kPanelY + 0.04f;
     Rect(0, 0, 1, 1, 0, 0, 0, (int)(110 * M.anim));         // dim the game behind
-    Backdrop(px, py, pw, kPanelH, 0.74f, 0.075f, true);
+    Backdrop(px, py, pw, kPanelH, 0.74f, 0.075f, true, adv);   // the tabs need the rect budget for their art: no sun there
     Rect(px, py, pw, 0.003f, 245, 230, 200, 120);
     Rect(px, py + kPanelH - 0.003f, pw, 0.003f, 245, 230, 200, 120);
 
     Text("CONTROLLER RUMBLE", 0.5f, py + 0.034f, 36, "title", Center, 245, 230, 200);
     Rect(0.5f - pw * 0.30f, py + 0.105f, pw * 0.60f, 0.002f, 245, 230, 200, 170);
-    Text(M.page ? "Advanced settings  -  " MOD_VERSION : "Settings  -  " MOD_VERSION, 0.5f, py + 0.112f, 22, "body", Center, 215, 185, 150);
+    Text(adv ? "Advanced settings  -  " MOD_VERSION : "Settings  -  " MOD_VERSION, 0.5f, py + 0.112f, 22, "body", Center, 215, 185, 150);
+
+    for (int t = 0; adv && t < kTabCount; t++) {
+        Cell c = TabCell(t);
+        bool on = t == M.page - 1;
+        Rect(c.x, c.y, c.w, c.h, 15, 5, 3, on ? 225 : 120);
+        if (on) Rect(c.x, c.y + c.h - 0.003f, c.w, 0.003f, 250, 175, 80, 255);
+        Text(kTabs[t], c.x + c.w * 0.5f, c.y + c.h * 0.5f - 0.010f, 19, "body", Center, on ? 250 : 215, on ? 175 : 185, on ? 80 : 150);
+    }
 
     for (int i = 0; i < kItems; i++) {
         const Cell& cell = g_cell[i];
         if (cell.h <= 0.f) continue;
         const MenuItem& it = g_items[i];
         const float rx = cell.x, rw = cell.w, y = cell.y, kRowH = cell.h;
-        bool sel = i == M.sel, child = GroupOf(i) >= 0;
-        Rect(rx, y, rw, kRowH, 15, 5, 3, sel ? 215 : child ? 110 : 150);
-        if (sel) {
+        bool sel = i == M.sel, child = GroupOf(i) >= 0, card = adv && it.kind == 1;
+        auto border = [&] {
+            if (!sel) return;
             Rect(rx, y, 0.004f, kRowH, 250, 175, 80, 255);
             Rect(rx, y, rw, 0.002f, 250, 175, 80, 160);
             Rect(rx, y + kRowH - 0.002f, rw, 0.002f, 250, 175, 80, 160);
-        }
+        };
+        Rect(rx, y, rw, kRowH, 15, 5, 3, card ? 235 : sel ? 215 : child ? 110 : 150);   // cards: solid, so the art fades into them
+        if (!card) border();
         int tr = sel ? 250 : 245, tg = sel ? 175 : 230, tb = sel ? 80 : 200;
         float ty = y + kRowH * 0.5f - 0.011f;
         if (it.kind == 3) { Text(it.label, 0.5f, ty, 22, "body", Center, tr, tg, tb); continue; }
-        if (M.page == 1) {   // tile: icon, name, On / Off
-            float ih = kRowH * 0.72f;
-            Icon(IconFor(it.key), rx + 0.008f, y + (kRowH - ih) * 0.5f, ih / 10.f, it.val != 0, sel);
-            float lx = rx + 0.008f + ih / aspect + 0.008f;
+        if (card) {   // title card: name and On / Off on the left, its scene on the right fading into the card
+            float ph = kRowH / 8.f, pxw = ph / aspect, ax = rx + rw - 24.f * pxw, fx = ax - kScenePad * pxw;
+            Scene(SceneFor(it.key), ax, y, ph, it.val != 0);
+            for (int k = 0; k < 5; k++)   // fade: the card colour thinning out over the plain left edge of the scene
+                Rect(fx + k * 2.f * pxw, y, 2.f * pxw + 0.0004f, kRowH, 15, 5, 3, 235 - k * 47);
+            ax = fx;                      // On / Off sits left of the whole scene
+            border();
             int dim = it.val ? 255 : 150;
-            Text(it.label, lx, ty, 20, "body", Left, tr * dim / 255, tg * dim / 255, tb * dim / 255);
-            Text(it.val ? "On" : "Off", rx + rw - 0.008f, ty, 20, "body", Right, it.val ? 250 : 160, it.val ? 175 : 140, it.val ? 80 : 120);
+            Text(it.label, rx + 0.016f, ty, 22, "body", Left, tr * dim / 255, tg * dim / 255, tb * dim / 255);
+            Text(it.val ? "On" : "Off", ax - 0.004f, ty, 20, "body", Right, it.val ? 250 : 160, it.val ? 175 : 140, it.val ? 80 : 120);
             continue;
         }
         float lx = rx + (child ? 0.030f : 0.012f);
@@ -433,9 +549,11 @@ static void MenuDraw(float cursorX, float cursorY) {
             Text("+", rx + rw * 0.96f, ty, 24, "body", Center, 245, 230, 200, 200);
         }
     }
-    Text(M.page ? "Click / Cross: on - off   -   Circle / Esc: back   -   F11: close"
-                : "Mouse: click, wheel   -   Pad: D-pad, Cross, Circle   -   F11 / Esc: close",
+    Text(adv ? "Left / Right or L1 / R1: tabs   -   Cross / click: on - off   -   Circle / Esc: back"
+             : "Mouse: click, wheel   -   Pad: D-pad, Cross, Circle   -   F11 / Esc: close",
          0.5f, g_rowsEnd + 0.006f, 16, "body", Center, 215, 185, 150, 220);
+    static int most = 0;   // RDR2 drops every rect past ~400 in a frame: log new highs to check the budget
+    if (cfg.debug && rects > most) { most = rects; Log("menu: %d rects in one frame", rects); }
     (void)cursorX; (void)cursorY;
 }
 
@@ -473,10 +591,10 @@ static bool MenuFrame(float dt) {
     // --- keyboard ---
     if (focused) {
         if (KeyEdge(VK_ESCAPE) || KeyEdge(VK_BACK)) { if (M.page) MenuPage(0); else { MenuClose(); return false; } }
-        if (KeyEdge(VK_UP))     MenuMove(M.page ? -2 : -1);   // the grid: up / down a row, left / right a column
-        if (KeyEdge(VK_DOWN))   MenuMove(M.page ? +2 : +1);
-        if (KeyEdge(VK_LEFT))   { if (M.page) MenuMove(-1); else MenuChange(M.sel, -1); }
-        if (KeyEdge(VK_RIGHT))  { if (M.page) MenuMove(+1); else MenuChange(M.sel, +1); }
+        if (KeyEdge(VK_UP))     MenuMove(-1);
+        if (KeyEdge(VK_DOWN))   MenuMove(+1);
+        if (KeyEdge(VK_LEFT))   { if (M.page) MenuTab(-1); else MenuChange(M.sel, -1); }   // advanced: switch tabs
+        if (KeyEdge(VK_RIGHT))  { if (M.page) MenuTab(+1); else MenuChange(M.sel, +1); }
         if (KeyEdge(VK_RETURN)) MenuChange(M.sel, 0);
         if (!M.open) return false;
     }
@@ -484,10 +602,12 @@ static bool MenuFrame(float dt) {
     uint32_t pad = g_padButtons.load(), pressed = pad & ~M.prevPad;
     M.prevPad = pad;
     if (pressed & B_CIRCLE) { if (M.page) MenuPage(0); else { MenuClose(); return false; } }
-    if (pressed & B_UP)     MenuMove(M.page ? -2 : -1);
-    if (pressed & B_DOWN)   MenuMove(M.page ? +2 : +1);
-    if (pressed & B_LEFT)   { if (M.page) MenuMove(-1); else MenuChange(M.sel, -1); }
-    if (pressed & B_RIGHT)  { if (M.page) MenuMove(+1); else MenuChange(M.sel, +1); }
+    if (pressed & B_UP)     MenuMove(-1);
+    if (pressed & B_DOWN)   MenuMove(+1);
+    if (pressed & B_LEFT)   { if (M.page) MenuTab(-1); else MenuChange(M.sel, -1); }
+    if (pressed & B_RIGHT)  { if (M.page) MenuTab(+1); else MenuChange(M.sel, +1); }
+    if (M.page && (pressed & B_L1)) MenuTab(-1);
+    if (M.page && (pressed & B_R1)) MenuTab(+1);
     if (pressed & B_CROSS)  MenuChange(M.sel, 0);
     if (!M.open) return false;
 
@@ -508,6 +628,8 @@ static bool MenuFrame(float dt) {
     bool lmb = focused && (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
     if (lmb && !M.prevLmb && GetTickCount() - M.lastNativeClick > 200) click = true;
     M.prevLmb = lmb;
+    int tab = TabHit(cx, cy);
+    if (click && tab >= 0 && tab != M.page - 1) { MenuClick(); MenuPage(tab + 1); }
     int zone, hit = MenuHit(cx, cy, zone);
     if (hit >= 0) {
         if (hit != M.hover) M.sel = hit;

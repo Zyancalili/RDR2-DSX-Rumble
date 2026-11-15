@@ -10,7 +10,7 @@
 //  * Menus        : a tick on every button press in the pause menu, map/catalog UI and the start menu.
 //  * Startup      : the gunshot of the startup splash, detected from the game's own audio level.
 //  * DSX (UDP)    : adaptive triggers per weapon (revolver/rifle/shotgun/bow/lasso), galloping
-//                   triggers on horseback, lightbar colour by health with a red flash on damage.
+//                   triggers on horseback, lightbar colour by place (red in fights) with a red flash on damage.
 //
 // Needs ScriptHookRDR2 (no SDK needed: its exports are resolved at runtime).
 
@@ -69,11 +69,11 @@ static fnNativePush64     shPush;
 static fnNativeCall       shCall;
 static HMODULE            g_module;
 // Versions: 1.6 -> 1.7 for a new version, 1.6 -> 1.6.1 -> 1.6.2 for bug fixes and small features
-#define MOD_VERSION "v1.6.3"
-#define MOD_VERSION_W L"1.6.3"
+#define MOD_VERSION "v1.7.0"
+#define MOD_VERSION_W L"1.7.0"
 #define MOD_VER_MAJOR 1
-#define MOD_VER_MINOR 6
-#define MOD_VER_PATCH 3
+#define MOD_VER_MINOR 7
+#define MOD_VER_PATCH 0
 // Update check: the tag of the latest GitHub release (tags look like v1.6 / v1.6.1).
 #define UPDATE_HOST L"api.github.com"
 #define UPDATE_PATH L"/repos/Zyancalili/RDR2-DSX-Rumble/releases/latest"
@@ -86,6 +86,7 @@ static fnWorldGetAll      shAllPeds, shAllObjects;
 // true while the game window has focus (rumble stops when you alt-tab out)
 static std::atomic<bool> g_focused{true};
 static std::atomic<bool> g_triggersDirty{false};   // set when focus returns: resend the trigger effects
+static std::atomic<bool> g_lightbarDirty{false};   // the pad thread coloured the lightbar (start screen)
 static bool GameFocused() {
     HWND w = GetForegroundWindow();
     DWORD pid = 0;
@@ -185,6 +186,11 @@ namespace N {
     constexpr uint64_t GET_GROUND_Z_AND_MATERIAL     = 0xBBE5B63EFFB08E68; // _GET_GROUND_Z_AND_MATERIAL_FOR_3D_COORD
     constexpr uint64_t IS_SCREEN_FADED_OUT           = 0xF5472C80DF2FF847;
     constexpr uint64_t IS_LOADING_SCREEN_VISIBLE     = 0xB54ADBE65D528FCB;
+    // checked against alloc8or's rdr3-nativedb-data (natives.json)
+    constexpr uint64_t IS_PED_RUNNING_TASK_ITEM_INTERACTION = 0xEC7E480FF8BD0BED;   // eating, drinking, tonics
+    constexpr uint64_t GET_ITEM_INTERACTION_STATE    = 0x6AA3DCA2C6F5EB6D;
+    constexpr uint64_t GET_LOOTING_PICKUP_TARGET_ENTITY = 0x14169FA823679E41;
+    constexpr uint64_t GET_MAP_ZONE_AT_COORDS        = 0x43AD8FC02B429D33;   // (x, y, z, type) -> zone hash
 }
 constexpr uint32_t INPUT_HORSE_SPRINT = 0x5AA007D7;
 
@@ -232,7 +238,7 @@ struct Config {
     float footsteps = 1.0f, horse = 1.0f, weapons = 1.0f, reload = 1.0f, damage = 1.0f, weaponSwitch = 1.0f;
     bool  horseWalk = true, horseTrot = true, horseCanter = true, horseGallop = true;   // hoofbeats per gait
     float melee = 1.0f, water = 1.0f, swimming = 1.0f;
-    float animals = 1.0f, doors = 1.0f, carry = 1.0f, sliding = 1.0f;
+    float animals = 1.0f, doors = 1.0f, carry = 1.0f, sliding = 1.0f, items = 1.0f;
     bool  muteUnfocused = true;
     bool  cutscenes = true;       // rumble while a cutscene plays
     float landing = 1.0f, vehicle = 1.0f, heartbeat = 1.0f;
@@ -291,6 +297,7 @@ static void LoadConfig() {
     c.doors      = Effect("Doors");
     c.carry      = Effect("Carry");
     c.sliding    = Effect("Sliding");
+    c.items      = Effect("Items");
     c.muteUnfocused = IniI("General", "MuteWhenUnfocused", 1) != 0;
     c.cutscenes     = IniI("General", "CutsceneRumble", 1) != 0;
     c.damage     = Effect("Damage");
@@ -692,6 +699,17 @@ static DWORD WINAPI PadThread(LPVOID) {
         }
         bool focused = g_focused;
 
+        // --- start screen: lightbar red until the game's scripts run (resent each second in case DSX restarts) ---
+        static uint64_t lastRed = 0;
+        if (cfg.dsx && cfg.lightbar && !scriptRunning && focused && now - lastRed > 1000) {
+            lastRed = now;
+            if (DSX::sock == INVALID_SOCKET) DSX::Open();
+            DSX::Packet pk;
+            pk.Add(DSX::RGBUpdate, {cfg.controllerIndex, 230, 10, 10});
+            pk.Send();
+            g_lightbarDirty = true;
+        }
+
         // --- menu button presses ---
         uint32_t b;
         while (Pad::ReadButtons(b)) {
@@ -1010,6 +1028,10 @@ struct State {
     uint32_t lastWeapon = 0;
     bool  sentValid = false;
     int   rgb[3] = {-1, -1, -1};
+    float lb[3] = {230.f, 10.f, 10.f};       // lightbar colour easing towards its target (starts red, like the start screen)
+    float fightT = 0.f, fightScanT = 0.f;    // > 0: in a fight
+    float regionT = 0.f; int region = 0;     // 0 = nature, 1 = Saint Denis, 2 = desert
+    bool  wasUsing = false; uint32_t useState = 0; int lootTarget = 0; float itemCd = 0.f;
     DWORD lastDsx = 0;
 } S;
 
@@ -1149,14 +1171,21 @@ static bool IsRiverZone(uint32_t zone) {
 static void WaterRumble(float level, float speed, bool river, bool heavy, float dt) {
     if (level < 0.05f) return;
     float depth = std::clamp(level / 0.6f, 0.f, 1.f);
-    // faster = more water pushed aside: a horse at a walk is faint, a gallop full; on foot a walk is faint, a sprint full
-    float move  = std::clamp(speed / (heavy ? 9.f : 5.f), 0.f, 1.f);
-    float drag  = (0.10f + 0.18f * depth) * move;                    // pushing water aside
-    float flow  = river ? (0.10f + 0.16f * depth) : 0.f;             // the current tugging at your legs
-    // the current comes in slow, irregular surges
-    S.waterPhase += dt * (river ? 1.6f : 1.0f);
+    // faster = more water pushed aside. Water slows you down a lot (a horse wades at ~2-6 m/s, you at ~1-3.5),
+    // so the scale is the speed you can really reach in it. The pace now carries most of the strength:
+    // standing still in a river is only a faint tug, wading at full speed is ~5x stronger.
+    float move  = std::clamp(speed / (heavy ? 6.f : 3.5f), 0.f, 1.f);
+    float drag  = (0.08f + 0.30f * depth) * move;                    // pushing water aside
+    float flow  = river ? (0.04f + 0.06f * depth) : 0.f;             // the current tugging at your legs
+    // the surges come quicker the faster you wade, so the pace is felt in the rhythm too
+    S.waterPhase += dt * ((river ? 1.4f : 1.0f) + 2.5f * move);
     float swell = 0.65f + 0.35f * sinf(S.waterPhase * 2.1f) * sinf(S.waterPhase * 0.77f + 1.3f);
-    float a = (drag + flow * swell) * (heavy ? 1.25f : 1.f) * cfg.water;
+    float a = (drag + flow) * swell * (heavy ? 1.25f : 1.f) * cfg.water;
+    static DWORD lastLog = 0;
+    if (cfg.debug && GetTickCount() - lastLog > 1000) {
+        lastLog = GetTickCount();
+        Log("water: level %.2f speed %.1f move %.2f river %d -> %.2f", level, speed, move, (int)river, a);
+    }
     g_contL = std::max(g_contL, a);
     g_contR = std::max(g_contR, a * 0.25f);
 }
@@ -1381,10 +1410,63 @@ static void Landing(float& minVz, float vz, float scale) {
     }
 }
 
-static void HealthColor(float ratio, int out[3]) {
-    ratio = std::clamp(ratio, 0.f, 1.f);
-    if (ratio > 0.5f) { float t = (ratio - 0.5f) * 2.f; out[0] = (int)(255 * (1 - t)); out[1] = 200; out[2] = (int)(40 * t); }
-    else              { float t = ratio * 2.f;          out[0] = 255; out[1] = (int)(200 * t); out[2] = 0; }
+// Where you are, for the lightbar: 0 = nature, 1 = Saint Denis, 2 = the desert.
+// shortcut: hand-picked map boxes, not the game's zones; switch to zone hashes once the debug log shows them.
+static int Region(int ped, float dt) {
+    S.regionT -= dt;
+    if (S.regionT > 0.f) return S.region;
+    S.regionT = 1.f;
+    Vec3 p = Nat<Vec3>(N::GET_ENTITY_COORDS, ped, true, true);
+    int r = (p.x > 2250.f && p.x < 3000.f && p.y > -1700.f && p.y < -900.f) ? 1      // Saint Denis
+          : (p.x < -3050.f && p.y < -1500.f)                                 ? 2      // Cholla Springs, Gaptooth Ridge, Rio Bravo
+          : 0;
+    if (cfg.debug && r != S.region)
+        Log("region %d at %.0f %.0f (zones: state 0x%08X, town 0x%08X, district 0x%08X)", r, p.x, p.y,
+            Nat<uint32_t>(N::GET_MAP_ZONE_AT_COORDS, p.x, p.y, p.z, 0), Nat<uint32_t>(N::GET_MAP_ZONE_AT_COORDS, p.x, p.y, p.z, 1),
+            Nat<uint32_t>(N::GET_MAP_ZONE_AT_COORDS, p.x, p.y, p.z, 10));
+    return S.region = r;
+}
+
+// In a fight: someone close is fighting you. Refreshed by punches and hits too (see Tick).
+static void FightScan(int ped, float dt) {
+    S.fightT -= dt; S.fightScanT -= dt;
+    if (S.fightScanT > 0.f || !shAllPeds) return;
+    S.fightScanT = 0.5f;
+    static int peds[512];
+    int n = shAllPeds(peds, 512);
+    Vec3 me = Nat<Vec3>(N::GET_ENTITY_COORDS, ped, true, true);
+    for (int i = 0; i < n; i++) {
+        int t = peds[i];
+        if (t == ped || !Nat<int>(N::IS_PED_HUMAN, t) || Nat<int>(N::IS_ENTITY_DEAD, t)) continue;
+        Vec3 p = Nat<Vec3>(N::GET_ENTITY_COORDS, t, true, true);
+        float dx = p.x - me.x, dy = p.y - me.y, dz = p.z - me.z;
+        if (dx * dx + dy * dy + dz * dz > 50.f * 50.f || !Nat<int>(N::IS_PED_IN_COMBAT, t, ped)) continue;
+        S.fightT = std::max(S.fightT, 4.f);
+        return;
+    }
+}
+
+// Eating, drinking, tonics (item interactions) and picking things up or looting.
+static void Items(int ped, float dt) {
+    S.itemCd -= dt;
+    bool using_ = Nat<int>(N::IS_PED_RUNNING_TASK_ITEM_INTERACTION, ped) != 0;
+    if (using_ && !S.wasUsing) AddPulse(0.22f, 0.18f, 0.05f, cfg.items, 3.5f);   // taking it in hand
+    if (using_) {
+        uint32_t st = Nat<uint32_t>(N::GET_ITEM_INTERACTION_STATE, ped);
+        if (st != S.useState && S.useState && S.itemCd <= 0.f) {               // each new step: a bite, a gulp
+            AddPulse(0.16f, 0.06f, 0.07f, cfg.items, 2.f);
+            S.itemCd = 0.25f;
+        }
+        if (cfg.debug && st != S.useState) Log("item interaction state 0x%08X", st);
+        S.useState = st;
+    } else S.useState = 0;
+    S.wasUsing = using_;
+    int loot = Nat<int>(N::GET_LOOTING_PICKUP_TARGET_ENTITY, ped);
+    if (loot != S.lootTarget && S.itemCd <= 0.f) {                               // reaching for it / taking it
+        AddPulse(loot ? 0.20f : 0.26f, 0.14f, loot ? 0.05f : 0.06f, cfg.items, 3.f);
+        S.itemCd = 0.15f;
+    }
+    S.lootTarget = loot;
 }
 
 // Cutscene gunfights: the player's own shots are handled as usual, this adds the shots of everyone
@@ -1482,6 +1564,8 @@ static void Tick(float dt) {
 
     // --- health / damage / death -------------------------------------------------------------
     bool inMelee = Nat<int>(N::IS_PED_IN_MELEE_COMBAT, ped) != 0;
+    if (inMelee) S.fightT = std::max(S.fightT, 3.f);
+    FightScan(ped, dt);
     int hp = Nat<int>(N::GET_ENTITY_HEALTH, ped);
     int maxHp = std::max(1, Nat<int>(N::GET_ENTITY_MAX_HEALTH, ped, false));
     if (S.health >= 0 && hp < S.health && !S.wasDead) {
@@ -1489,6 +1573,7 @@ static void Tick(float dt) {
         int attacker = Nat<int>(N::GET_LAST_ENTITY_TO_DAMAGE, ped);
         bool animal = attacker && attacker != ped && Nat<int>(N::IS_ENTITY_A_PED, attacker)
                       && !Nat<int>(N::IS_PED_HUMAN, attacker);
+        if (attacker && attacker != ped) S.fightT = std::max(S.fightT, 6.f);   // hurt by someone or something: a fight
         if (animal) {
             if (S.biteCooldown <= 0.f) { AnimalAttack(attacker, drop, maxHp); S.biteCooldown = 0.25f; S.flashT = 0.35f; }
         } else if ((inMelee || (attacker && Nat<int>(N::IS_ENTITY_A_PED, attacker) && !Nat<int>(N::IS_PED_SHOOTING, attacker)
@@ -1634,7 +1719,7 @@ static void Tick(float dt) {
     S.wasInWater = inWater;
     if (swimming && !dead) SwimRumble(ped, dt);
     if (cine) CutsceneGunfire(ped, dt); else S.cinePeds.clear();
-    if (!dead) { Carrying(ped); BearRoars(ped, dt); if (!onMount && !inVehicle) Doors(ped, dt); }
+    if (!dead) { Carrying(ped); BearRoars(ped, dt); Items(ped, dt); if (!onMount && !inVehicle) Doors(ped, dt); }
 
     // --- movement ------------------------------------------------------------------------------
     float horseSpeed = 0.f;
@@ -1729,16 +1814,24 @@ static void Tick(float dt) {
     }
 
     if (cfg.lightbar) {
-        int c[3];
+        // red in fights (pulsing when low on health) and on loading screens; otherwise the land you are in
+        static const float region[3][3] = { {60, 200, 90}, {255, 170, 90}, {255, 85, 10} };   // nature, Saint Denis, desert
+        bool fight = S.fightT > 0.f, loading = Nat<int>(N::IS_LOADING_SCREEN_VISIBLE) != 0;
+        const float* to = fight || loading ? nullptr : region[Region(ped, dt)];
+        float red[3] = {230, 10, 10};
+        if (!to) to = red;
+        bool snap = dead || S.flashT > 0.f;
+        float k = std::min(1.f, dt * 2.5f);              // ease over ~1 s between colours
+        for (int i = 0; i < 3; i++) S.lb[i] += (to[i] - S.lb[i]) * k;
+        int c[3] = {(int)S.lb[0], (int)S.lb[1], (int)S.lb[2]};
         if (dead) { c[0] = 90; c[1] = 0; c[2] = 0; }
         else if (S.flashT > 0.f) { c[0] = 255; c[1] = 0; c[2] = 0; }
-        else {
-            HealthColor(ratio, c);
-            if (ratio < cfg.lowHealth) {          // pulse while low
-                float k = 0.45f + 0.55f * (0.5f + 0.5f * sinf(now * 0.008f));
-                for (int& x : c) x = (int)(x * k);
-            }
+        else if (fight && ratio < cfg.lowHealth) {       // low in a fight: pulse
+            float p = 0.35f + 0.65f * (0.5f + 0.5f * sinf(now * 0.008f));
+            for (int& x : c) x = (int)(x * p);
         }
+        if (snap) for (int i = 0; i < 3; i++) S.lb[i] = (float)c[i];
+        if (g_lightbarDirty.exchange(false)) S.rgb[0] = -1;   // the start screen coloured it meanwhile
         bool diff = std::abs(c[0] - S.rgb[0]) + std::abs(c[1] - S.rgb[1]) + std::abs(c[2] - S.rgb[2]) > 12;
         static DWORD lastRgb = 0;
         if ((diff && now - lastRgb > 50) || keepAlive) {
@@ -1757,7 +1850,7 @@ static void ScriptMain() {
     LoadConfig();
     Log("RDR2 Controller Rumble " MOD_VERSION " - script started (backend=%s, dsx=%d)", cfg.backend ? "Direct" : "Game", (int)cfg.dsx);
     InitWeapons();
-    DSX::Open();
+    if (DSX::sock == INVALID_SOCKET) DSX::Open();   // the pad thread may have opened it for the start screen
     StartUpdateCheck();
     FILETIME iniT = IniTime();
     DWORD lastCheck = GetTickCount();

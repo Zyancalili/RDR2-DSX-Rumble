@@ -1,18 +1,20 @@
 [b]First of all, if you find a bug and/or want something added please leave a comment and I will do that.[/b]
 
-[size=5][b]RDR2 Controller Rumble[/b][/size] - v1.6.3
+[size=5][b]RDR2 Controller Rumble[/b][/size] - v1.7.0
 [i]Rumble that follows what happens in the game - for DualSense and Xbox controllers. (Formerly "RDR2 DSX Rumble".)[/i]
 
 [b]30+ rumble effects, each one fine-tuned by hand[/b] - plus [b]12 adaptive trigger profiles[/b] for the weapons on the DualSense.
 
 [b]DualSense users: [url=https://store.steampowered.com/app/1812620/DSX/]DSX[/url] is required.[/b] It's the best way to play: you also get adaptive triggers and the lightbar. Xbox controllers work without anything extra.
 
-[size=4][b]What's new in v1.6.3[/b][/size]
+[size=4][b]What's new in v1.7.0[/b][/size]
 [list]
-[*]Horse rumble has its own dropdown in F11: switch all of it off at once, or open it to set the strength and turn each gait (walk, trot, canter, gallop) on or off. At a gait that is off, only big drops and crashes still rumble.
-[*]New "Advanced settings" page in F11: every effect on its own on/off switch, with a little pixel icon for each
-[*]Wading through water now grows with your pace - a walk is faint, a gallop or sprint is full
-[*]Menu clicks can now be felt on the DualSense, and they also work with mouse and keyboard in the F11 menu
+[*][b]Lightbar by place:[/b] red on the start screen and in fights (pulsing when you are low on health), a calm green in nature, light orange in Saint Denis, deep orange in the desert
+[*][b]Eating and items:[/b] a soft rumble when you eat, drink, take a tonic, pick something up or loot
+[*][b]New Advanced settings in F11:[/b] three tabs, every effect as its own title card with pixel art - switch each one on or off
+[*][b]Horse dropdown in F11:[/b] all horse rumble on/off, its strength, and each gait (walk, trot, canter, gallop) on its own
+[*]Wading through water now really grows with your pace
+[*]Menu clicks can be felt on the DualSense, also with mouse and keyboard in F11
 [/list]
 
 [size=4][b]Features[/b][/size]
@@ -21,9 +23,9 @@
 [*][b]Horse[/b] - hoofbeats that follow the gait, jumps, crashes, deep snow
 [*][b]Guns[/b] - a kick sized to each weapon, reload and weapon-switch clicks
 [*][b]Fights and damage[/b] - punches given and taken, wounds, animal attacks
-[*][b]World[/b] - water, swimming, doors, carrying bodies, sliding, falls, wagons, cutscenes
+[*][b]World[/b] - water, swimming, doors, carrying bodies, eating and items, sliding, falls, wagons, cutscenes
 [*][b]Low health[/b] - a heartbeat
-[*][b]DualSense only:[/b] adaptive triggers tuned per weapon (plus bow and lasso), lightbar that follows your health
+[*][b]DualSense only:[/b] adaptive triggers tuned per weapon (plus bow and lasso), lightbar that changes with the place you are in and turns red in fights
 [/list]
 
 [size=4][b]Requirements[/b][/size]
