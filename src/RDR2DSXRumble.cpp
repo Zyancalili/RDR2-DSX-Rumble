@@ -69,11 +69,11 @@ static fnNativePush64     shPush;
 static fnNativeCall       shCall;
 static HMODULE            g_module;
 // Versions: 1.6 -> 1.7 for a new version, 1.6 -> 1.6.1 -> 1.6.2 for bug fixes and small features
-#define MOD_VERSION "v1.7.0"
-#define MOD_VERSION_W L"1.7.0"
+#define MOD_VERSION "v1.7.1"
+#define MOD_VERSION_W L"1.7.1"
 #define MOD_VER_MAJOR 1
 #define MOD_VER_MINOR 7
-#define MOD_VER_PATCH 0
+#define MOD_VER_PATCH 1
 // Update check: the tag of the latest GitHub release (tags look like v1.6 / v1.6.1).
 #define UPDATE_HOST L"api.github.com"
 #define UPDATE_PATH L"/repos/Zyancalili/RDR2-DSX-Rumble/releases/latest"
@@ -237,6 +237,7 @@ struct Config {
     float curve = 2.0f;
     float footsteps = 1.0f, horse = 1.0f, weapons = 1.0f, reload = 1.0f, damage = 1.0f, weaponSwitch = 1.0f;
     bool  horseWalk = true, horseTrot = true, horseCanter = true, horseGallop = true;   // hoofbeats per gait
+    bool  footWalk = true, footRun = true, footSprint = true;                           // footsteps per pace
     float melee = 1.0f, water = 1.0f, swimming = 1.0f;
     float animals = 1.0f, doors = 1.0f, carry = 1.0f, sliding = 1.0f, items = 1.0f;
     bool  muteUnfocused = true;
@@ -287,6 +288,9 @@ static void LoadConfig() {
     c.horseTrot  = IniI("Rumble", "HorseTrot", 1) != 0;
     c.horseCanter = IniI("Rumble", "HorseCanter", 1) != 0;
     c.horseGallop = IniI("Rumble", "HorseGallop", 1) != 0;
+    c.footWalk   = IniI("Rumble", "FootWalk", 1) != 0;
+    c.footRun    = IniI("Rumble", "FootRun", 1) != 0;
+    c.footSprint = IniI("Rumble", "FootSprint", 1) != 0;
     c.weapons    = Effect("Weapons");
     c.reload     = Effect("Reload");
     c.weaponSwitch = Effect("WeaponSwitch");
@@ -1131,7 +1135,14 @@ static void HorseRumble(float speed, float dt) {
     }
 }
 
+// Footsteps switched on for this pace? (F11 > Footsteps dropdown)
+// shortcut: pace from speed (walk < 2.5 m/s, run < 5, sprint above); use IS_PED_SPRINTING if the edges feel off.
+static bool FootPaceOn(float speed) {
+    return speed < 2.5f ? cfg.footWalk : speed < 5.f ? cfg.footRun : cfg.footSprint;
+}
+
 static void FootstepPulse(bool left, float speed) {
+    if (!FootPaceOn(speed)) return;
     // Boots on the ground: a faint, short heel strike. Walking is barely there, sprinting is a clear tap.
     // Shorter, sharper and with more of the light motor so it reads as a tap, not a smear.
     // (a bit stronger than the first crisp version, to make up for the energy the shorter pulse lost)

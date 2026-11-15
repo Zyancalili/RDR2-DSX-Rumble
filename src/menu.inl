@@ -230,7 +230,11 @@ static const char* SceneFor(const char* key) {
 static MenuItem g_items[] = {
     {"Rumble strength",        "Rumble",  "Intensity",          0, 100, 0, 200, 10},
     {"Response curve",         "Rumble",  "ResponseCurve",      2, 15,  5, 40,  1},
-    {"Footsteps",              "Rumble",  "Footsteps",          0, 100, 0, 200, 10},
+    {"Footsteps",              "Effects", "Footsteps",          4, 1,   0, 0,   4},
+    {"Strength",               "Rumble",  "Footsteps",          0, 100, 0, 200, 10},
+    {"Walking",                "Rumble",  "FootWalk",           1, 1},
+    {"Running",                "Rumble",  "FootRun",            1, 1},
+    {"Sprinting",              "Rumble",  "FootSprint",         1, 1},
     {"Horse",                  "Rumble",  "HorseRumble",        4, 1,   0, 0,   5},
     {"Strength",               "Rumble",  "Horse",              0, 100, 0, 200, 10},
     {"At a walk",              "Rumble",  "HorseWalk",          1, 1},
@@ -287,7 +291,7 @@ constexpr int kItems = sizeof g_items / sizeof g_items[0];
 
 static struct {
     bool  open = false, paused = false;
-    bool  expanded = false;           // shortcut: one flag for all dropdowns, fine while "Horse" is the only one
+    int   expanded = -1;              // the open dropdown row (one at a time), -1 = none
     int   page = 0;                   // 0 = settings, 1..kTabCount = the advanced tabs
     int   sel = 0, hover = -1;
     float anim = 0.f;
@@ -304,7 +308,7 @@ static int GroupOf(int i) {
     return -1;
 }
 static int PageOf(int i) { int p = 0; for (int j = 0; j < i; j++) p += g_items[j].kind == 5; return p; }
-static bool Hidden(int i) { return g_items[i].kind == 5 || PageOf(i) != M.page || (!M.expanded && GroupOf(i) >= 0); }
+static bool Hidden(int i) { return g_items[i].kind == 5 || PageOf(i) != M.page || (GroupOf(i) >= 0 && GroupOf(i) != M.expanded); }
 
 // A short tick for mouse and keyboard use too (the pad thread only clicks on controller buttons).
 static void MenuClick(float a = 0.26f) { if (cfg.menu) AddPulse(a, a * 0.9f, 0.035f, cfg.menuIntensity, 4.f); }
@@ -392,7 +396,7 @@ static void MenuChange(int i, int dir) {
             if (nv != it.val) { it.val = nv; MenuSave(it); }
             break; }
         case 4:   // activate = open / close the dropdown, left / right = on / off
-            if (dir == 0) M.expanded = !M.expanded;
+            if (dir == 0) M.expanded = M.expanded == i ? -1 : i;
             else { it.val = !it.val; MenuSave(it); }
             break;
         case 3:
@@ -418,7 +422,7 @@ static void MenuValueText(const MenuItem& it, char* out, size_t n) {
 }
 
 // Layout (0..1 screen units). The settings page is a list; the advanced tabs are wide title cards with art.
-static constexpr float kPanelY = 0.04f, kRowsY = 0.185f, kTabH = 0.040f;
+static constexpr float kPanelY = 0.04f, kRowsY = 0.185f, kTabH = 0.034f;
 struct Cell { float x, y, w, h; };   // h = 0: not on screen
 static Cell  g_cell[kItems];
 static float g_rowsEnd;              // y just below the last row
@@ -433,7 +437,7 @@ static void Layout() {
     bool adv = M.page > 0;
     float top = adv ? kRowsY + kTabH + 0.012f : kRowsY;
     // settings: rows shrink when the dropdown is open, so the panel always ends above 0.95
-    float step = adv ? 0.068f : std::min(0.045f, 0.725f / std::max(rows, 1)), h = step * (adv ? 0.91f : 0.89f);
+    float step = adv ? 0.050f : std::min(0.045f, 0.725f / std::max(rows, 1)), h = step * (adv ? 0.90f : 0.89f);
     int r = 0;
     for (int i = 0; i < kItems; i++) g_cell[i] = Hidden(i) ? Cell{0, 0, 0, 0} : Cell{rx, top + r++ * step, rw, h};
     g_rowsEnd = top + rows * step;
@@ -496,7 +500,7 @@ static void MenuDraw(float cursorX, float cursorY) {
         bool on = t == M.page - 1;
         Rect(c.x, c.y, c.w, c.h, 15, 5, 3, on ? 225 : 120);
         if (on) Rect(c.x, c.y + c.h - 0.003f, c.w, 0.003f, 250, 175, 80, 255);
-        Text(kTabs[t], c.x + c.w * 0.5f, c.y + c.h * 0.5f - 0.010f, 19, "body", Center, on ? 250 : 215, on ? 175 : 185, on ? 80 : 150);
+        Text(kTabs[t], c.x + c.w * 0.5f, c.y + c.h * 0.5f - 0.0088f, 17, "body", Center, on ? 250 : 215, on ? 175 : 185, on ? 80 : 150);
     }
 
     for (int i = 0; i < kItems; i++) {
@@ -524,15 +528,16 @@ static void MenuDraw(float cursorX, float cursorY) {
             ax = fx;                      // On / Off sits left of the whole scene
             border();
             int dim = it.val ? 255 : 150;
-            Text(it.label, rx + 0.016f, ty, 22, "body", Left, tr * dim / 255, tg * dim / 255, tb * dim / 255);
-            Text(it.val ? "On" : "Off", ax - 0.004f, ty, 20, "body", Right, it.val ? 250 : 160, it.val ? 175 : 140, it.val ? 80 : 120);
+            float cy = y + kRowH * 0.5f - 0.0095f;   // smaller text on the compact cards
+            Text(it.label, rx + 0.014f, cy, 19, "body", Left, tr * dim / 255, tg * dim / 255, tb * dim / 255);
+            Text(it.val ? "On" : "Off", ax - 0.004f, cy, 18, "body", Right, it.val ? 250 : 160, it.val ? 175 : 140, it.val ? 80 : 120);
             continue;
         }
         float lx = rx + (child ? 0.030f : 0.012f);
         if (it.kind == 4) {   // pixel arrow: > closed, v open
             float ax = rx + 0.012f, ay = y + kRowH * 0.5f, u = 0.0028f;
             for (int k = 0; k < 4; k++) {
-                if (M.expanded) Rect(ax + k * u * 0.6f, ay - u * 1.5f + k * u, (7 - 2 * k) * u * 0.6f, u, tr, tg, tb, 255);
+                if (M.expanded == i) Rect(ax + k * u * 0.6f, ay - u * 1.5f + k * u, (7 - 2 * k) * u * 0.6f, u, tr, tg, tb, 255);
                 else            Rect(ax + k * u * 0.6f, ay - (3.5f - k) * u, u * 0.6f, (7 - 2 * k) * u, tr, tg, tb, 255);
             }
             lx = rx + 0.030f;
