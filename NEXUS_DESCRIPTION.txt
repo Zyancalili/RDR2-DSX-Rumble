@@ -10,6 +10,9 @@
 [size=4][b]What's new in v1.6.3[/b][/size]
 [list]
 [*]Horse rumble has its own dropdown in F11: switch all of it off at once, or open it to set the strength and turn each gait (walk, trot, canter, gallop) on or off. At a gait that is off, only big drops and crashes still rumble.
+[*]New "Advanced settings" page in F11: every effect on its own on/off switch, with a little pixel icon for each
+[*]Wading through water now grows with your pace - a walk is faint, a gallop or sprint is full
+[*]Menu clicks can now be felt on the DualSense, and they also work with mouse and keyboard in the F11 menu
 [/list]
 
 [size=4][b]Features[/b][/size]

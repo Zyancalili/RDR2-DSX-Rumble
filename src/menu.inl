@@ -106,10 +106,41 @@ namespace UI {
 struct MenuItem {
     const char* label;
     const char* sec; const char* key;
-    int kind;                  // 0 = percent slider, 1 = toggle, 2 = curve (x10), 3 = action, 4 = toggle + dropdown
+    int kind;                  // 0 = percent slider, 1 = toggle, 2 = curve (x10), 3 = action, 4 = toggle + dropdown, 5 = next page starts
     int def, min, max, step;   // kind 4: step = how many rows below belong to its dropdown
     int val;
 };
+
+// 10x10 pixel icons for the advanced page, in the pixel style of the Nexus art.
+// '#' = main colour, '+' = amber accent, 'r' = red, '.' = empty
+static const struct { const char* key; const char* px; } g_icons[] = {
+    {"Footsteps",       "...###...." "...###...." "...###...." "...###...." "...####..." "...######." "..#######." "..########" "..++++++++" ".........."},
+    {"HorseRumble",     ".##....##." ".#+....+#." "##......##" "#+......+#" "##......##" ".##....##." ".###..###." "..######.." "...####..." ".........."},
+    {"Weapons",         ".........." "..#######+" ".#######.." ".##++##..." ".#####...." ".##..#...." ".##.##...." "###......." "###......." ".........."},
+    {"Reload",          ".........." ".++.++.++." ".++.++.++." ".##.##.##." ".##.##.##." ".##.##.##." ".##.##.##." ".##.##.##." ".##.##.##." ".........."},
+    {"WeaponSwitch",    "...####..." ".##.##.##." ".#..##..#." "#...##...#" "##########" "#+++##...#" ".#++##..#." ".##+##.##." "...####..." ".........."},
+    {"Melee",           ".........." "..######.." ".#+#+#+##." ".########." ".#+#+#+##." ".########." ".#####++#." "..######.." "...####..." "...####..."},
+    {"Damage",          "....r....." "....r....." "...rrr...." "...rrr...." "..rrrrr..." ".rr#rrrr.." ".r##rrrr.." ".rrrrrrr.." "..rrrrr..." "...rrr...."},
+    {"Heartbeat",       ".........." ".rr...rr.." "rrrr.rrrr." "r#rrrrrrr." "rrrrrrrrr." ".rrrrrrr.." "..rrrrr..." "...rrr...." "....r....." ".........."},
+    {"Animals",         ".........." "..##..##.." "..##..##.." "##......##" "##.####.##" "..######.." ".########." ".########." "..######.." ".........."},
+    {"Water",           ".........." "..##...##." ".#..#.#..#" "#....#...." ".........." "..++...++." ".+..+.+..+" "+....+...." ".........." ".........."},
+    {"Swimming",        "......##.." ".....####." "......##.." "##........" "..###....." "....##...." "..++...++." ".+..+.+..+" "+....+...." ".........."},
+    {"Doors",           ".########." ".#......#." ".#.####.#." ".#.#..#.#." ".#.####.#." ".#.....+#." ".#.####.#." ".#.#..#.#." ".#.####.#." ".########."},
+    {"Carry",           "....++...." "...#..#..." "...####..." "..######.." ".########." ".###++###." ".########." ".########." "..######.." ".........."},
+    {"Sliding",         "#........." "#+........" "##+......." "###+......" "####+....." "#####+...." "######+..." "#######+.." "##########" ".........."},
+    {"Landing",         "....##...." "....##...." "....##...." "..######.." "...####..." "....##...." ".........." "+.+.++.+.+" "##########" ".........."},
+    {"Vehicle",         "...####..." ".##....##." ".#+.##.+#." "#..+##+..#" "#.##++##.#" "#.##++##.#" "#..+##+..#" ".#+.##.+#." ".##....##." "...####..."},
+    {"CutsceneRumble",  ".........." "#.#.#.#.#." "##########" "#++++++++#" "#++++++++#" "#++++++++#" "##########" "#.#.#.#.#." ".........." ".........."},
+    {"ButtonRumble",    ".#........" ".##......." ".#+#......" ".#++#....." ".#+++#...." ".#++++#..." ".#++###..." ".###.##..." ".#....##.." "......##.."},
+    {"SplashShotRumble","....#....." ".#..#..#.." "..#.#.#..." "...+++...." "####+####." "...+++...." "..#.#.#..." ".#..#..#.." "....#....." ".........."},
+    {"AdaptiveTriggers",".........." "...####..." "..#++++#.." ".#++++++#." ".#++++++#." ".#++++++#." ".#++++++#." ".########." ".........." ".........."},
+    {"GallopingTriggersOnHorse", ".........." "...####..." "+.#++++#.+" ".+#++++#+." "+.#++++#.+" "..#++++#.." "..######.." ".##....##." ".#+....+#." ".........."},
+    {"Lightbar",        ".........." "+...+...+." ".+..+..+.." "..+.+.+..." ".........." "##########" "#++++++++#" "##########" ".........." ".........."},
+};
+static const char* IconFor(const char* key) {
+    for (auto& ic : g_icons) if (key && !strcmp(ic.key, key)) return ic.px;
+    return nullptr;
+}
 
 static MenuItem g_items[] = {
     {"Rumble strength",        "Rumble",  "Intensity",          0, 100, 0, 200, 10},
@@ -130,14 +161,41 @@ static MenuItem g_items[] = {
     {"Mute when alt-tabbed",   "General", "MuteWhenUnfocused",  1, 1},
     {"Check for updates",      "General", "CheckForUpdates",    1, 1},
     {"Pause game in this menu","General", "MenuPausesGame",     1, 1},
+    {"Advanced settings",      nullptr,   nullptr,              3},
     {"Test rumble",            nullptr,   nullptr,              3},
     {"Close",                  nullptr,   nullptr,              3},
+    {"",                       nullptr,   nullptr,              5},
+    // advanced page: every effect on its own switch ([Effects] in the ini, the strengths stay in [Rumble])
+    {"Footsteps",              "Effects", "Footsteps",          1, 1},
+    {"Horse",                  "Rumble",  "HorseRumble",        1, 1},
+    {"Gunshots",               "Effects", "Weapons",            1, 1},
+    {"Reloading",              "Effects", "Reload",             1, 1},
+    {"Weapon switch",          "Effects", "WeaponSwitch",       1, 1},
+    {"Fistfights",             "Effects", "Melee",              1, 1},
+    {"Getting hurt",           "Effects", "Damage",             1, 1},
+    {"Heartbeat",              "Effects", "Heartbeat",          1, 1},
+    {"Animal attacks",         "Effects", "Animals",            1, 1},
+    {"Water",                  "Effects", "Water",              1, 1},
+    {"Swimming",               "Effects", "Swimming",           1, 1},
+    {"Doors",                  "Effects", "Doors",              1, 1},
+    {"Carrying",               "Effects", "Carry",              1, 1},
+    {"Sliding",                "Effects", "Sliding",            1, 1},
+    {"Falls and jumps",        "Effects", "Landing",            1, 1},
+    {"Wagons",                 "Effects", "Vehicle",            1, 1},
+    {"Cutscenes",              "General", "CutsceneRumble",     1, 1},
+    {"Menu clicks",            "Menu",    "ButtonRumble",       1, 1},
+    {"Startup shot",           "Startup", "SplashShotRumble",   1, 1},
+    {"Adaptive triggers",      "DSX",     "AdaptiveTriggers",   1, 1},
+    {"Gallop triggers",        "DSX",     "GallopingTriggersOnHorse", 1, 1},
+    {"Lightbar",               "DSX",     "Lightbar",           1, 1},
+    {"Back",                   nullptr,   nullptr,              3},
 };
 constexpr int kItems = sizeof g_items / sizeof g_items[0];
 
 static struct {
     bool  open = false, paused = false;
     bool  expanded = false;           // shortcut: one flag for all dropdowns, fine while "Horse" is the only one
+    int   page = 0;                   // 0 = settings, 1 = advanced
     int   sel = 0, hover = -1;
     float anim = 0.f;
     uint32_t prevPad = 0;
@@ -152,8 +210,20 @@ static int GroupOf(int i) {
         if (g_items[j].kind == 4 && i <= j + g_items[j].step) return j;
     return -1;
 }
-static bool Hidden(int i) { return !M.expanded && GroupOf(i) >= 0; }
-static void MenuMove(int d) { do M.sel = (M.sel + d + kItems) % kItems; while (Hidden(M.sel)); }
+static int PageOf(int i) { int p = 0; for (int j = 0; j < i; j++) p += g_items[j].kind == 5; return p; }
+static bool Hidden(int i) { return g_items[i].kind == 5 || PageOf(i) != M.page || (!M.expanded && GroupOf(i) >= 0); }
+
+// A short tick for mouse and keyboard use too (the pad thread only clicks on controller buttons).
+static void MenuClick(float a = 0.26f) { if (cfg.menu) AddPulse(a, a * 0.9f, 0.035f, cfg.menuIntensity, 4.f); }
+
+// d visible rows down (negative = up), wrapping around
+static void MenuMove(int d) {
+    int vis[kItems], n = 0, pos = 0;
+    for (int i = 0; i < kItems; i++) if (!Hidden(i)) { if (i <= M.sel) pos = n; vis[n++] = i; }
+    if (!n) return;
+    M.sel = vis[((pos + d) % n + n) % n];
+    MenuClick(0.22f);
+}
 
 static bool KeyEdge(int vk) {
     bool down = (GetAsyncKeyState(vk) & 0x8000) != 0;
@@ -188,7 +258,7 @@ static void MenuClose() {
 }
 
 static void MenuOpen() {
-    M.open = true; M.sel = 0; M.anim = 0.f;
+    M.open = true; M.sel = 0; M.page = 0; M.anim = 0.f;
     MenuLoadValues();
     UI::UpdateScreen();
     M.paused = IniI("General", "MenuPausesGame", 1) != 0;
@@ -204,9 +274,17 @@ static void MenuOpen() {
     Log("menu opened");
 }
 
+static void MenuPage(int p) {
+    M.page = p;
+    MenuLoadValues();                 // both pages show some of the same keys
+    for (int i = 0; i < kItems; i++)  // advanced page: its first tile, back on page 1: the "Advanced settings" row
+        if (!Hidden(i) && (p == 1 || !strcmp(g_items[i].label, "Advanced settings"))) { M.sel = i; break; }
+}
+
 // dir = -1 / +1 to change a value, 0 = activate (click / cross / enter)
 static void MenuChange(int i, int dir) {
     MenuItem& it = g_items[i];
+    if (!((it.kind == 0 || it.kind == 2) && dir == 0) && !(it.kind == 3 && dir != 0)) MenuClick();
     switch (it.kind) {
         case 1: it.val = !it.val; MenuSave(it);
                 if (!strcmp(it.key, "MenuPausesGame")) {
@@ -226,6 +304,8 @@ static void MenuChange(int i, int dir) {
         case 3:
             if (dir != 0) return;
             if (!strcmp(it.label, "Close")) MenuClose();
+            else if (!strcmp(it.label, "Advanced settings")) MenuPage(1);
+            else if (!strcmp(it.label, "Back")) MenuPage(0);
             else {   // a revolver shot, so the strength settings can be felt right away
                 AddPulse(0.15f * 0.72f, 0.72f, 0.045f, cfg.weapons, 4.5f);
                 AddPulse(0.56f, 0.14f, 0.09f, cfg.weapons, 3.f);
@@ -243,18 +323,62 @@ static void MenuValueText(const MenuItem& it, char* out, size_t n) {
     }
 }
 
-// Layout (0..1 screen units)
+// Layout (0..1 screen units). The settings page is a list, the advanced page a two-column grid of tiles.
 static constexpr float kPanelY = 0.04f, kRowsY = 0.185f;
-// Rows shrink when the dropdown is open, so the panel always ends above 0.95.
-static int   VisibleRows() { int n = 0; for (int i = 0; i < kItems; i++) n += !Hidden(i); return n; }
-static float RowStep()     { return std::min(0.045f, 0.725f / VisibleRows()); }
+struct Cell { float x, y, w, h; };   // h = 0: not on screen
+static Cell  g_cell[kItems];
+static float g_rowsEnd;              // y just below the last row
+
+static float PanelW() { return 0.52f / UI::aspect * (16.f / 9.f) * 0.75f; }   // ~0.39 of the width on 16:9
+
+static void Layout() {
+    float pw = PanelW(), rx = 0.5f - pw * 0.5f + pw * 0.06f, rw = pw * 0.88f, gap = 0.006f;
+    auto tile = [](int i) { return M.page == 1 && g_items[i].kind != 3; };
+    int rows = 0, col = 0;
+    for (int i = 0; i < kItems; i++) {
+        if (Hidden(i)) continue;
+        if (!tile(i) || col == 0) rows++;
+        col = tile(i) ? col ^ 1 : 0;
+    }
+    // rows shrink when the dropdown is open, so the panel always ends above 0.95
+    float step = std::min(M.page == 1 ? 0.060f : 0.045f, 0.725f / std::max(rows, 1)), h = step * 0.89f;
+    float cw = (rw - gap) * 0.5f;
+    int r = -1; col = 0;
+    for (int i = 0; i < kItems; i++) {
+        g_cell[i] = {0, 0, 0, 0};
+        if (Hidden(i)) continue;
+        if (!tile(i) || col == 0) r++;
+        g_cell[i] = tile(i) ? Cell{rx + col * (cw + gap), kRowsY + r * step, cw, h} : Cell{rx, kRowsY + r * step, rw, h};
+        col = tile(i) ? col ^ 1 : 0;
+    }
+    g_rowsEnd = kRowsY + rows * step;
+}
+
+// Draws a 10x10 icon from g_icons, ph = height of one pixel. Runs of one colour are one rect.
+static void Icon(const char* px, float x, float y, float ph, bool on, bool sel) {
+    if (!px) return;
+    float pxw = ph / UI::aspect;      // square pixels
+    for (int r = 0; r < 10; r++)
+        for (int c = 0; c < 10; ) {
+            char ch = px[r * 10 + c];
+            int n = 1; while (c + n < 10 && px[r * 10 + c + n] == ch) n++;
+            int R, G, B;
+            if (ch == '#')      { R = sel ? 255 : 245; G = sel ? 215 : 230; B = sel ? 160 : 200; }
+            else if (ch == '+') { R = 250; G = 175; B = 80; }
+            else if (ch == 'r') { R = 205; G = 55;  B = 45; }
+            else { c += n; continue; }
+            if (!on) { R = R * 2 / 5; G = G * 2 / 5; B = B * 2 / 5; }   // switched off: the icon goes dark
+            UI::Rect(x + c * pxw, y + r * ph, n * pxw, ph, R, G, B, 255);
+            c += n;
+        }
+}
 
 static void MenuDraw(float cursorX, float cursorY) {
     using namespace UI;
-    float pw = 0.52f / aspect * (16.f / 9.f) * 0.75f;      // ~0.39 of the width on 16:9
+    Layout();
+    float pw = PanelW();
     float px = 0.5f - pw * 0.5f, py = kPanelY;
-    const float step = RowStep(), kRowH = step * 0.89f;
-    const float kPanelH = kRowsY - kPanelY + VisibleRows() * step + 0.04f;
+    const float kPanelH = g_rowsEnd - kPanelY + 0.04f;
     Rect(0, 0, 1, 1, 0, 0, 0, (int)(110 * M.anim));         // dim the game behind
     Backdrop(px, py, pw, kPanelH, 0.74f, 0.075f, true);
     Rect(px, py, pw, 0.003f, 245, 230, 200, 120);
@@ -262,14 +386,13 @@ static void MenuDraw(float cursorX, float cursorY) {
 
     Text("CONTROLLER RUMBLE", 0.5f, py + 0.034f, 36, "title", Center, 245, 230, 200);
     Rect(0.5f - pw * 0.30f, py + 0.105f, pw * 0.60f, 0.002f, 245, 230, 200, 170);
-    Text("Settings  -  " MOD_VERSION, 0.5f, py + 0.112f, 22, "body", Center, 215, 185, 150);
+    Text(M.page ? "Advanced settings  -  " MOD_VERSION : "Settings  -  " MOD_VERSION, 0.5f, py + 0.112f, 22, "body", Center, 215, 185, 150);
 
-    float rx = px + pw * 0.06f, rw = pw * 0.88f;
-    int row = 0;
     for (int i = 0; i < kItems; i++) {
-        if (Hidden(i)) continue;
+        const Cell& cell = g_cell[i];
+        if (cell.h <= 0.f) continue;
         const MenuItem& it = g_items[i];
-        float y = kRowsY + row++ * step;
+        const float rx = cell.x, rw = cell.w, y = cell.y, kRowH = cell.h;
         bool sel = i == M.sel, child = GroupOf(i) >= 0;
         Rect(rx, y, rw, kRowH, 15, 5, 3, sel ? 215 : child ? 110 : 150);
         if (sel) {
@@ -280,6 +403,15 @@ static void MenuDraw(float cursorX, float cursorY) {
         int tr = sel ? 250 : 245, tg = sel ? 175 : 230, tb = sel ? 80 : 200;
         float ty = y + kRowH * 0.5f - 0.011f;
         if (it.kind == 3) { Text(it.label, 0.5f, ty, 22, "body", Center, tr, tg, tb); continue; }
+        if (M.page == 1) {   // tile: icon, name, On / Off
+            float ih = kRowH * 0.72f;
+            Icon(IconFor(it.key), rx + 0.008f, y + (kRowH - ih) * 0.5f, ih / 10.f, it.val != 0, sel);
+            float lx = rx + 0.008f + ih / aspect + 0.008f;
+            int dim = it.val ? 255 : 150;
+            Text(it.label, lx, ty, 20, "body", Left, tr * dim / 255, tg * dim / 255, tb * dim / 255);
+            Text(it.val ? "On" : "Off", rx + rw - 0.008f, ty, 20, "body", Right, it.val ? 250 : 160, it.val ? 175 : 140, it.val ? 80 : 120);
+            continue;
+        }
         float lx = rx + (child ? 0.030f : 0.012f);
         if (it.kind == 4) {   // pixel arrow: > closed, v open
             float ax = rx + 0.012f, ay = y + kRowH * 0.5f, u = 0.0028f;
@@ -301,25 +433,20 @@ static void MenuDraw(float cursorX, float cursorY) {
             Text("+", rx + rw * 0.96f, ty, 24, "body", Center, 245, 230, 200, 200);
         }
     }
-    float fy = kRowsY + row * step + 0.006f;
-    Text("Mouse: click, wheel   -   Pad: D-pad, Cross, Circle   -   F11 / Esc: close", 0.5f, fy, 16, "body", Center, 215, 185, 150, 220);
+    Text(M.page ? "Click / Cross: on - off   -   Circle / Esc: back   -   F11: close"
+                : "Mouse: click, wheel   -   Pad: D-pad, Cross, Circle   -   F11 / Esc: close",
+         0.5f, g_rowsEnd + 0.006f, 16, "body", Center, 215, 185, 150, 220);
     (void)cursorX; (void)cursorY;
 }
 
 // Row + zone under the cursor. zone: -1 = left (decrease) / label, +1 = right (increase), 0 = label
 static int MenuHit(float cx, float cy, int& zone) {
-    using namespace UI;
-    float pw = 0.52f / aspect * (16.f / 9.f) * 0.75f;
-    float px = 0.5f - pw * 0.5f, rx = px + pw * 0.06f, rw = pw * 0.88f;
+    Layout();
     zone = 0;
-    if (cx < rx || cx > rx + rw) return -1;
-    const float step = RowStep(), kRowH = step * 0.89f;
-    int row = 0;
     for (int i = 0; i < kItems; i++) {
-        if (Hidden(i)) continue;
-        float y = kRowsY + row++ * step;
-        if (cy >= y && cy <= y + kRowH) {
-            float f = (cx - rx) / rw;
+        const Cell& c = g_cell[i];
+        if (c.h > 0.f && cx >= c.x && cx <= c.x + c.w && cy >= c.y && cy <= c.y + c.h) {
+            float f = (cx - c.x) / c.w;
             if (g_items[i].kind == 0 || g_items[i].kind == 2) zone = f > 0.82f ? 1 : f > 0.62f ? -1 : 0;
             if (g_items[i].kind == 4) zone = f > 0.62f ? 1 : 0;   // label opens the dropdown, the value switches on / off
             return i;
@@ -345,22 +472,22 @@ static bool MenuFrame(float dt) {
 
     // --- keyboard ---
     if (focused) {
-        if (KeyEdge(VK_ESCAPE) || KeyEdge(VK_BACK)) { MenuClose(); return false; }
-        if (KeyEdge(VK_UP))     MenuMove(-1);
-        if (KeyEdge(VK_DOWN))   MenuMove(+1);
-        if (KeyEdge(VK_LEFT))   MenuChange(M.sel, -1);
-        if (KeyEdge(VK_RIGHT))  MenuChange(M.sel, +1);
+        if (KeyEdge(VK_ESCAPE) || KeyEdge(VK_BACK)) { if (M.page) MenuPage(0); else { MenuClose(); return false; } }
+        if (KeyEdge(VK_UP))     MenuMove(M.page ? -2 : -1);   // the grid: up / down a row, left / right a column
+        if (KeyEdge(VK_DOWN))   MenuMove(M.page ? +2 : +1);
+        if (KeyEdge(VK_LEFT))   { if (M.page) MenuMove(-1); else MenuChange(M.sel, -1); }
+        if (KeyEdge(VK_RIGHT))  { if (M.page) MenuMove(+1); else MenuChange(M.sel, +1); }
         if (KeyEdge(VK_RETURN)) MenuChange(M.sel, 0);
         if (!M.open) return false;
     }
     // --- controller ---
     uint32_t pad = g_padButtons.load(), pressed = pad & ~M.prevPad;
     M.prevPad = pad;
-    if (pressed & B_CIRCLE) { MenuClose(); return false; }
-    if (pressed & B_UP)     MenuMove(-1);
-    if (pressed & B_DOWN)   MenuMove(+1);
-    if (pressed & B_LEFT)   MenuChange(M.sel, -1);
-    if (pressed & B_RIGHT)  MenuChange(M.sel, +1);
+    if (pressed & B_CIRCLE) { if (M.page) MenuPage(0); else { MenuClose(); return false; } }
+    if (pressed & B_UP)     MenuMove(M.page ? -2 : -1);
+    if (pressed & B_DOWN)   MenuMove(M.page ? +2 : +1);
+    if (pressed & B_LEFT)   { if (M.page) MenuMove(-1); else MenuChange(M.sel, -1); }
+    if (pressed & B_RIGHT)  { if (M.page) MenuMove(+1); else MenuChange(M.sel, +1); }
     if (pressed & B_CROSS)  MenuChange(M.sel, 0);
     if (!M.open) return false;
 

@@ -254,6 +254,11 @@ static int IniI(const char* sec, const char* key, int def) {
     return (int)GetPrivateProfileIntA(sec, key, def, g_iniPath);
 }
 
+// Strength of one effect: [Rumble] Key in %, or 0 when [Effects] Key=0 switches it off (F11 > Advanced settings).
+static float Effect(const char* key) {
+    return IniI("Effects", key, 1) ? IniF("Rumble", key, 100) / 100.f : 0.f;
+}
+
 static void LoadConfig() {
     Config c;
     c.enabled            = IniI("General", "Enabled", 1) != 0;
@@ -270,28 +275,28 @@ static void LoadConfig() {
     c.shotIntensity = IniF("Startup", "Intensity", 100) / 100.f;
     c.intensity  = IniF("Rumble", "Intensity", 100) / 100.f;
     c.curve      = std::clamp(IniF("Rumble", "ResponseCurve", 2.0f), 0.5f, 4.f);
-    c.footsteps  = IniF("Rumble", "Footsteps", 100) / 100.f;
+    c.footsteps  = Effect("Footsteps");
     c.horse      = IniI("Rumble", "HorseRumble", 1) ? IniF("Rumble", "Horse", 100) / 100.f : 0.f;   // HorseRumble=0 mutes all horse rumble
     c.horseWalk  = IniI("Rumble", "HorseWalk", 1) != 0;
     c.horseTrot  = IniI("Rumble", "HorseTrot", 1) != 0;
     c.horseCanter = IniI("Rumble", "HorseCanter", 1) != 0;
     c.horseGallop = IniI("Rumble", "HorseGallop", 1) != 0;
-    c.weapons    = IniF("Rumble", "Weapons", 100) / 100.f;
-    c.reload     = IniF("Rumble", "Reload", 100) / 100.f;
-    c.weaponSwitch = IniF("Rumble", "WeaponSwitch", 100) / 100.f;
-    c.melee      = IniF("Rumble", "Melee", 100) / 100.f;
-    c.water      = IniF("Rumble", "Water", 100) / 100.f;
-    c.swimming   = IniF("Rumble", "Swimming", 100) / 100.f;
-    c.animals    = IniF("Rumble", "Animals", 100) / 100.f;
-    c.doors      = IniF("Rumble", "Doors", 100) / 100.f;
-    c.carry      = IniF("Rumble", "Carry", 100) / 100.f;
-    c.sliding    = IniF("Rumble", "Sliding", 100) / 100.f;
+    c.weapons    = Effect("Weapons");
+    c.reload     = Effect("Reload");
+    c.weaponSwitch = Effect("WeaponSwitch");
+    c.melee      = Effect("Melee");
+    c.water      = Effect("Water");
+    c.swimming   = Effect("Swimming");
+    c.animals    = Effect("Animals");
+    c.doors      = Effect("Doors");
+    c.carry      = Effect("Carry");
+    c.sliding    = Effect("Sliding");
     c.muteUnfocused = IniI("General", "MuteWhenUnfocused", 1) != 0;
     c.cutscenes     = IniI("General", "CutsceneRumble", 1) != 0;
-    c.damage     = IniF("Rumble", "Damage", 100) / 100.f;
-    c.landing    = IniF("Rumble", "Landing", 100) / 100.f;
-    c.vehicle    = IniF("Rumble", "Vehicle", 100) / 100.f;
-    c.heartbeat  = IniF("Rumble", "Heartbeat", 100) / 100.f;
+    c.damage     = Effect("Damage");
+    c.landing    = Effect("Landing");
+    c.vehicle    = Effect("Vehicle");
+    c.heartbeat  = Effect("Heartbeat");
     c.lowHealth  = IniF("Rumble", "HeartbeatBelowHealth", 20) / 100.f;
     c.dsx             = IniI("DSX", "Enabled", 1) != 0;
     c.dsxPort         = IniI("DSX", "Port", 0);
@@ -695,12 +700,13 @@ static DWORD WINAPI PadThread(LPVOID) {
             g_padButtons = b;
             if (!pressed || !cfg.enabled || !cfg.menu || !menu || !focused) continue;
             float s = cfg.menuIntensity * cfg.intensity;
-            // short crisp clicks on the light (right) motor, like a UI detent - not a thump
-            if (pressed & B_CROSS)                                  pulse(0.05f, 0.30f, 0.030f, s, 4.f);
-            else if (pressed & (B_CIRCLE | B_OPTIONS))              pulse(0.03f, 0.25f, 0.028f, s, 4.f);
-            else if (pressed & (B_TRIANGLE | B_SQUARE))             pulse(0.00f, 0.22f, 0.025f, s, 4.f);
-            else if (pressed & (B_L1 | B_R1))                       pulse(0.00f, 0.22f, 0.022f, s, 5.f);
-            else if (pressed & (B_UP | B_DOWN | B_LEFT | B_RIGHT))  pulse(0.00f, 0.17f, 0.018f, s, 5.f);
+            // short crisp clicks, like a UI detent - not a thump. Mostly on the heavy motor: the light one is
+            // so weak on the DualSense that light-motor-only clicks could not be felt at all.
+            if (pressed & B_CROSS)                                  pulse(0.32f, 0.30f, 0.035f, s, 4.f);
+            else if (pressed & (B_CIRCLE | B_OPTIONS))              pulse(0.28f, 0.25f, 0.035f, s, 4.f);
+            else if (pressed & (B_TRIANGLE | B_SQUARE))             pulse(0.26f, 0.22f, 0.032f, s, 4.f);
+            else if (pressed & (B_L1 | B_R1))                       pulse(0.24f, 0.22f, 0.030f, s, 5.f);
+            else if (pressed & (B_UP | B_DOWN | B_LEFT | B_RIGHT))  pulse(0.22f, 0.17f, 0.030f, s, 5.f);
         }
 
         // --- startup splash shot (only before the game's scripts are running) ---
@@ -1143,7 +1149,8 @@ static bool IsRiverZone(uint32_t zone) {
 static void WaterRumble(float level, float speed, bool river, bool heavy, float dt) {
     if (level < 0.05f) return;
     float depth = std::clamp(level / 0.6f, 0.f, 1.f);
-    float move  = std::clamp(speed / 4.f, 0.f, 1.f);
+    // faster = more water pushed aside: a horse at a walk is faint, a gallop full; on foot a walk is faint, a sprint full
+    float move  = std::clamp(speed / (heavy ? 9.f : 5.f), 0.f, 1.f);
     float drag  = (0.10f + 0.18f * depth) * move;                    // pushing water aside
     float flow  = river ? (0.10f + 0.16f * depth) : 0.f;             // the current tugging at your legs
     // the current comes in slow, irregular surges
@@ -1643,7 +1650,7 @@ static void Tick(float dt) {
             }
             S.waterZoneT -= dt;
             bool gaitOn = HorseGaitOn(horseSpeed);
-            if (gaitOn) WaterRumble(S.mountWater, horseSpeed, S.river, true, dt);   // wading counts as riding at that gait
+            WaterRumble(S.mountWater, horseSpeed, S.river, true, dt);
             ScanSnow(mount, dt);
             HorseRumble(horseSpeed, dt);
             Vec3 v = Nat<Vec3>(N::GET_ENTITY_VELOCITY, mount, 0);

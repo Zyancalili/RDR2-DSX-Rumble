@@ -127,9 +127,9 @@ Grid 'Rumble that makes sense' 'Every effect is tuned to how it would feel - sna
     @('Gunshots', 'A crack plus a recoil kick sized to the gun - from the .22 tap to the Elephant Rifle.'),
     @('Fistfights', 'A hard smack when you take a punch, a knuckle thud when yours lands.'),
     @('Animals', 'Dog and wolf bites that tug, bear mauls, bull rams - and the growl when a bear roars.'),
-    @('Water and swimming', 'Rivers push against you, still water only stirs. Rhythmic swim strokes.'),
+    @('Water and swimming', 'Rivers push against you; wading grows with your pace. Rhythmic swim strokes.'),
     @('World and cutscenes', 'Door slams, carrying bodies, sliding, falls, wagons. Cutscene gunfights too.'),
-    @('F11 settings menu', 'Tune every effect in game - mouse, keyboard or controller.'),
+    @('F11 settings menu', 'Tune it in game, plus an Advanced page to switch every effect on or off.'),
     @('Health', 'A heartbeat at low health, a jolt for every wound. Light clicks in menus.')
 ) '2_rumble.png'
 
