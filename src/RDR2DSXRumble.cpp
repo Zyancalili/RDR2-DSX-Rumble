@@ -21,6 +21,7 @@
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <setupapi.h>
+#include <cfgmgr32.h>
 #include <hidsdi.h>
 #include <mmdeviceapi.h>
 #include <audiopolicy.h>
@@ -38,6 +39,7 @@
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "hid.lib")
 #pragma comment(lib, "setupapi.lib")
+#pragma comment(lib, "cfgmgr32.lib")
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "winmm.lib")
 #pragma comment(lib, "user32.lib")
@@ -490,24 +492,41 @@ namespace Pad {
     // dualsense = false: DSX's virtual DualShock 4 (054C:05C4 / 09CC). true: the real DualSense (0CE6) or DualSense Edge (0DF2).
     static bool OpenHid(bool dualsense) {
         GUID hidGuid; HidD_GetHidGuid(&hidGuid);
+        std::vector<std::string> paths;
         HDEVINFO set = SetupDiGetClassDevsA(&hidGuid, nullptr, nullptr, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
-        if (set == INVALID_HANDLE_VALUE) return false;
-        SP_DEVICE_INTERFACE_DATA ifd{}; ifd.cbSize = sizeof ifd;
+        if (set != INVALID_HANDLE_VALUE) {
+            SP_DEVICE_INTERFACE_DATA ifd{}; ifd.cbSize = sizeof ifd;
+            for (DWORD i = 0; SetupDiEnumDeviceInterfaces(set, nullptr, &hidGuid, i, &ifd); i++) {
+                DWORD need = 0;
+                SetupDiGetDeviceInterfaceDetailA(set, &ifd, nullptr, 0, &need, nullptr);
+                std::vector<uint8_t> mem(need + 8);
+                auto* det = (SP_DEVICE_INTERFACE_DETAIL_DATA_A*)mem.data();
+                det->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_A);
+                if (SetupDiGetDeviceInterfaceDetailA(set, &ifd, det, need, nullptr, nullptr)) paths.push_back(det->DevicePath);
+            }
+            SetupDiDestroyDeviceInfoList(set);
+        }
+        int setupApi = (int)paths.size(), cmApi = 0;
+        if (dualsense) {
+            // Steam's overlay filters the SetupAPI list inside the game while Steam Input is on (the DualSense is missing
+            // there, 22 of 23 devices). The config manager list is a second, independent source: try those paths too.
+            ULONG len = 0;
+            if (CM_Get_Device_Interface_List_SizeA(&len, &hidGuid, nullptr, CM_GET_DEVICE_INTERFACE_LIST_PRESENT) == CR_SUCCESS && len > 1) {
+                std::vector<char> list(len);
+                if (CM_Get_Device_Interface_ListA(&hidGuid, nullptr, list.data(), len, CM_GET_DEVICE_INTERFACE_LIST_PRESENT) == CR_SUCCESS)
+                    for (const char* q = list.data(); *q; q += strlen(q) + 1) { paths.push_back(q); cmApi++; }
+            }
+        }
         bool ok = false;
         int seen = 0, denied = 0; DWORD deniedErr = 0;
-        for (DWORD i = 0; !ok && SetupDiEnumDeviceInterfaces(set, nullptr, &hidGuid, i, &ifd); i++) {
-            DWORD need = 0;
-            SetupDiGetDeviceInterfaceDetailA(set, &ifd, nullptr, 0, &need, nullptr);
-            std::vector<uint8_t> mem(need + 8);
-            auto* det = (SP_DEVICE_INTERFACE_DETAIL_DATA_A*)mem.data();
-            det->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_A);
-            if (!SetupDiGetDeviceInterfaceDetailA(set, &ifd, det, need, nullptr, nullptr)) continue;
+        for (size_t pi = 0; !ok && pi < paths.size(); pi++) {
+            const char* devPath = paths[pi].c_str();
             seen++;
-            std::string path = det->DevicePath;   // USB "...vid_054c&pid_0ce6...", Bluetooth "...vid&0002054c_pid&0ce6..."
+            std::string path = devPath;   // USB "...vid_054c&pid_0ce6...", Bluetooth "...vid&0002054c_pid&0ce6..."
             for (char& ch : path) ch = (char)tolower((unsigned char)ch);
             bool looksDS = path.find("054c") != std::string::npos &&
                            (path.find("0ce6") != std::string::npos || path.find("0df2") != std::string::npos);
-            HANDLE d = CreateFileA(det->DevicePath, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+            HANDLE d = CreateFileA(devPath, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
                                    nullptr, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr);
             if (d == INVALID_HANDLE_VALUE) { if (dualsense && looksDS) { denied++; deniedErr = GetLastError(); } continue; }
             HIDD_ATTRIBUTES a{}; a.Size = sizeof a;
@@ -535,7 +554,7 @@ namespace Pad {
                                 Log("pad: DualSense%s %04X:%04X over %s (in %u, out %u bytes, firmware %d.%02d%s, rumble %s)",
                                     a.ProductID == 0x0DF2 ? " Edge" : "", a.VendorID, a.ProductID, bt ? "Bluetooth" : "USB",
                                     inLen, outLen, ver >> 8, ver & 255, got ? "" : " (not readable)", rumbleV2 ? "v2" : "v1");
-                                if (cfg.debug) Log("pad: path %s", det->DevicePath);
+                                if (cfg.debug) Log("pad: path %s (from the %s list)", devPath, (int)pi < setupApi ? "SetupAPI" : "config manager");
                             } else Log("pad: virtual DualShock 4 %04X:%04X (in %u, out %u bytes)", a.VendorID, a.ProductID, inLen, outLen);
                         } else if (dualsense) Log("pad: DualSense found, but its output report is %u bytes (need %u..%u)",
                                                   caps.OutputReportByteLength, needOut, (unsigned)sizeof outBuf);
@@ -545,7 +564,6 @@ namespace Pad {
             }
             if (!ok) CloseHandle(d);
         }
-        SetupDiDestroyDeviceInfoList(set);
         if (ok) {
             if (!rov.hEvent) rov.hEvent = CreateEventA(nullptr, TRUE, FALSE, nullptr);
             if (!wov.hEvent) wov.hEvent = CreateEventA(nullptr, TRUE, FALSE, nullptr);
@@ -557,6 +575,7 @@ namespace Pad {
                                 "add RDR2.exe to HidHide's allowed applications, or switch 'DualSense without DSX' off in F11.", deniedErr);
                 else        Log("pad: no DualSense found for the direct output (%d HID devices seen). If it is connected, something hides it "
                                 "from the game (HidHide or Steam Input). Rumble falls back to XInput; adaptive triggers and lightbar are off.", seen);
+                Log("pad: device lists: SetupAPI %d, config manager %d", setupApi, cmApi);
             }
         }
         return ok;
