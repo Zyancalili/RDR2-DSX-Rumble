@@ -30,6 +30,7 @@
 [list]
 [*][url=https://www.dev-c.com/rdr2/scripthookrdr2/]Script Hook RDR2[/url]
 [*]DualSense with [url=https://store.steampowered.com/app/1812620/DSX/]DSX[/url], or DualSense without DSX (DualSense Native file), or an Xbox controller
+[*]Alternative (DualSense Native file only): [url=https://www.rdr2mods.com/downloads/rdr2/tools/76-lennys-mod-loader-rdr/]Lenny's Mod Loader[/url], needed for the PlayStation buttons
 [/list]
 
 [size=4][b]Installation[/b][/size]
@@ -44,7 +45,7 @@ Optional file [i]DualSense Native (no DSX)[/i]. The mod talks to the DualSense i
 [list=1]
 [*]Install Script Hook RDR2.
 [*]Copy [i]RDR2DSXRumble.asi[/i] and [i]RDR2DSXRumble.ini[/i] from the DualSense Native zip into the game folder.
-[*][b]Lenny's Mod Loader (LML) is needed for the PlayStation buttons.[/b] Without it everything else works, but the game shows Xbox buttons. To install it, download Lenny's Mod Loader RDR (on rdr2mods.com or Nexus), open its [i]ModLoader[/i] folder and copy everything inside into the game folder (next to [i]RDR2.exe[/i]). Then copy the [i]lml[/i] folder from the DualSense Native zip into the game folder too. The icons are the game's own PS4 art.
+[*][b]PlayStation buttons:[/b] install [url=https://www.rdr2mods.com/downloads/rdr2/tools/76-lennys-mod-loader-rdr/]Lenny's Mod Loader[/url] and copy the [i]lml[/i] folder from the zip into the game folder.
 [*]Steam: RDR2 > Properties > Controller > Steam Input [b]ON[/b]. Keep DSX closed.
 [/list]
 
