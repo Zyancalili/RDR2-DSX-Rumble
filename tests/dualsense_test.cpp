@@ -89,6 +89,10 @@ int main() {
     memset(buf, 0, sizeof buf);
     Check("F  USB, release (FinalReset)", buf, DS5::Build(buf, false, 0, true, rel),
           "02 0E 04 00 00 00 00 00 00 00 00 05 00 00 00 00 00 00 00 00 00 00 05 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 04 00 00 00 00 00 00 00 40");
+    memset(buf, 0, sizeof buf);   // firmware unreadable (1.8.1): Bluetooth falls back to rumble v1
+    Check("G  Bluetooth, rumble v1, motors only", buf, DS5::Build(buf, true, 0, false, m),
+          "31 00 10 03 00 01 FF 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 "
+          "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 59 31 D0 AD");
 
     printf(fails ? "\n%d FAILED\n" : "\nall passed\n", fails);
     return fails != 0;

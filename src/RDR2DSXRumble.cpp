@@ -72,11 +72,11 @@ static fnNativePush64     shPush;
 static fnNativeCall       shCall;
 static HMODULE            g_module;
 // Versions: 1.6 -> 1.7 for a new version, 1.6 -> 1.6.1 -> 1.6.2 for bug fixes and small features
-#define MOD_VERSION "v1.8.0"
-#define MOD_VERSION_W L"1.8.0"
+#define MOD_VERSION "v1.8.1"
+#define MOD_VERSION_W L"1.8.1"
 #define MOD_VER_MAJOR 1
 #define MOD_VER_MINOR 8
-#define MOD_VER_PATCH 0
+#define MOD_VER_PATCH 1
 // DualSense Native edition (branch dualsense-native): always without DSX, own update channel (version_native.txt)
 #define DUALSENSE_NATIVE 1
 // Update check: the tag of the latest GitHub release (tags look like v1.6 / v1.6.1).
@@ -475,7 +475,9 @@ namespace Pad {
     static bool       isDS = false, isBT = false, rumbleV2 = false;   // real DualSense open / over Bluetooth / firmware 2.21+
     static bool       fresh = false;                                  // just (re)opened: write the whole state once
     static uint8_t    seq = 0;                                        // Bluetooth report sequence, 0..15
-    static uint8_t    inBuf[256], outBuf[1024];                       // the Bluetooth output length may be 547 (unverified)
+    static bool       btAltTried = false, btWorks = false;            // Bluetooth: other output length tried / a write went through
+    static bool       noRead = false;                                 // reading the DualSense failed: buttons off, output keeps going
+    static uint8_t    inBuf[256], outBuf[1024];                       // Bluetooth output: Windows wants the longest report, 547 bytes
     static uint64_t   lastOpenTry = 0;
 
     static void LoadXInput() {
@@ -555,9 +557,10 @@ namespace Pad {
                     HidD_FreePreparsedData(pp);
                 }
                 if (!gotCaps && dualsense) {   // same hiding trick on the report sizes: the known DualSense sizes instead
-                    // shortcut: Bluetooth sizes assumed 78/78/64; upgrade if a Bluetooth log shows writes failing
+                    // Bluetooth: the 0x31 report is 78 bytes, but Windows sizes every write to the longest output report
+                    // in the descriptor (0x39, 547 bytes; hidapi pads the same way). WriteDS falls back to 78 if 547 fails.
                     bool btPath = path.find("{00001124-") != std::string::npos || path.find("&0002054c") != std::string::npos;
-                    caps.InputReportByteLength = btPath ? 78 : 64; caps.OutputReportByteLength = btPath ? 78 : 48;
+                    caps.InputReportByteLength = btPath ? 78 : 64; caps.OutputReportByteLength = btPath ? 547 : 48;
                     caps.FeatureReportByteLength = 64; gotCaps = true;
                 }
                 if (gotCaps) {
@@ -567,13 +570,15 @@ namespace Pad {
                         inLen = std::min<USHORT>(caps.InputReportByteLength, sizeof inBuf);
                         outLen = caps.OutputReportByteLength;
                         h = d; ok = true; isDS = dualsense; isBT = bt; fresh = true; seq = 0;
+                        btAltTried = btWorks = noRead = false;
                         if (dualsense) {
                             // firmware "update version" (feature report 0x20, bytes 44-45): 2.21+ has the improved rumble
                             // emulation. On Bluetooth, reading a feature report also switches the pad to its full reports.
                             uint8_t fw[256] = {0x20};
                             bool got = HidD_GetFeature(d, fw, std::clamp<USHORT>(caps.FeatureReportByteLength, 64, sizeof fw)) != 0;
                             int ver = got ? fw[44] | (fw[45] << 8) : 0;
-                            rumbleV2 = a.ProductID == 0x0DF2 || ver >= 0x0215 || !got;   // unreadable: assume a current firmware
+                            // unreadable: v1, which every firmware understands (v2 alone is ignored before 2.21: no rumble)
+                            rumbleV2 = a.ProductID == 0x0DF2 || (got && ver >= 0x0215);
                             Log("pad: DualSense%s %04X:%04X over %s (in %u, out %u bytes, firmware %d.%02d%s, rumble %s%s)",
                                 a.ProductID == 0x0DF2 ? " Edge" : "", a.VendorID, a.ProductID, bt ? "Bluetooth" : "USB",
                                 inLen, outLen, ver >> 8, ver & 255, got ? "" : " (not readable)", rumbleV2 ? "v2" : "v1",
@@ -647,21 +652,36 @@ namespace Pad {
     }
 
     // One DualSense report, asynchronously. false = the last write is still on its way, or it failed (the pad was closed).
+    static bool WriteFailed(DWORD err) {
+        if (isBT && !btWorks && !btAltTried) {   // Bluetooth: the other output length once (547 <-> 78) before giving up
+            btAltTried = true;
+            USHORT alt = outLen == 78 ? 547 : 78;
+            Log("pad: Bluetooth write of %u bytes failed (%lu), trying %u bytes", outLen, err, alt);
+            outLen = alt; fresh = true;   // fresh: the caller sends the whole state again
+            return false;
+        }
+        Log("pad: DualSense write failed (%lu, %u bytes), reopening", err, outLen);
+        Close();
+        return false;
+    }
+    static void WriteWorked() {
+        if (isBT && !btWorks) { btWorks = true; Log("pad: Bluetooth output works (%u bytes)", outLen); }
+    }
+
     static bool WriteDS(const DS5::Out& o) {
         if (writing) {
             if (WaitForSingleObject(wov.hEvent, 0) != WAIT_OBJECT_0) return false;
             DWORD n; writing = false;
-            if (!GetOverlappedResult(h, &wov, &n, FALSE)) { Log("pad: DualSense write failed (%lu), reopening", GetLastError()); Close(); return false; }
+            if (!GetOverlappedResult(h, &wov, &n, FALSE)) return WriteFailed(GetLastError());
+            WriteWorked();
         }
         memset(outBuf, 0, outLen);
         DS5::Build(outBuf, isBT, seq, rumbleV2, o);
         seq = (seq + 1) & 15;
         ResetEvent(wov.hEvent);
-        if (WriteFile(h, outBuf, outLen, nullptr, &wov)) return true;
+        if (WriteFile(h, outBuf, outLen, nullptr, &wov)) { WriteWorked(); return true; }
         if (GetLastError() == ERROR_IO_PENDING) { writing = true; return true; }
-        Log("pad: DualSense write failed (%lu, %u bytes), reopening", GetLastError(), outLen);
-        Close();
-        return false;
+        return WriteFailed(GetLastError());
     }
 
     // Triggers loose, motors off, lightbar back to Steam's default blue. Synchronous: at process exit the pad thread
@@ -702,10 +722,16 @@ namespace Pad {
     // Returns true when a new button state was read.
     static bool ReadButtons(uint32_t& out) {
         if (h != INVALID_HANDLE_VALUE) {
+            if (noRead) return false;
             if (!reading) {
                 ResetEvent(rov.hEvent);
                 if (ReadFile(h, inBuf, inLen, nullptr, &rov)) { reading = true; }
                 else if (GetLastError() == ERROR_IO_PENDING) reading = true;
+                else if (isDS) {   // a read size the pad rejects must not cost the rumble: keep writing, skip the buttons
+                    Log("pad: reading the DualSense failed (%lu, %u bytes); rumble, triggers and lightbar go on, "
+                        "controller buttons in the F11 menu are off", GetLastError(), inLen);
+                    noRead = true; return false;
+                }
                 else { Log("pad: read failed (%lu), reopening", GetLastError()); Close(); return false; }
             }
             if (WaitForSingleObject(rov.hEvent, 0) != WAIT_OBJECT_0) return false;
