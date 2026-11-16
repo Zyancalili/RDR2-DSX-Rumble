@@ -1,6 +1,6 @@
 [b]First of all, if you find a bug and/or want something added please leave a comment and I will do that.[/b]
 
-[size=5][b]RDR2 Controller Rumble[/b][/size] - v1.8.0
+[size=5][b]RDR2 Controller Rumble[/b][/size] - v1.8.1
 [i]Rumble that follows what happens in the game, for DualSense and Xbox controllers. (Formerly "RDR2 DSX Rumble".)[/i]
 
 [b]30+ rumble effects[/b], each one tuned by hand, plus [b]12 adaptive trigger profiles[/b] for the weapons on the DualSense.
@@ -16,13 +16,10 @@
 
 [line]
 
-[size=4][b]What's new in v1.8.0[/b][/size]
+[size=4][b]What's new in v1.8.1[/b][/size]
 [list]
-[*][b]DualSense without DSX:[/b] the new DualSense Native file talks to the controller itself
-[*][b]PlayStation buttons[/b] in game with the Native file
-[*][b]Footsteps dropdown in F11:[/b] on or off, strength, and walking / running / sprinting separately
-[*]Walking no longer rumbles by default (switch it back on in F11)
-[*]F11 dropdowns open one at a time, and the Advanced settings page is more compact
+[*][b]Bluetooth fix for the DualSense Native file:[/b] rumble, triggers and lightbar should now work over Bluetooth too. If it still doesn't rumble, please post your [i]RDR2DSXRumble.log[/i]
+[*]Main file: no changes, only the version number
 [/list]
 
 [line]
@@ -76,6 +73,7 @@ More options are in [i]RDR2DSXRumble.ini[/i]. Changes apply while the game runs.
 [list]
 [*][b]No rumble with DSX:[/b] check that DSX is running with Incoming UDP on.
 [*][b]No rumble with Native:[/b] check that DSX is closed and Steam Input is on.
+[*][b]No rumble over Bluetooth with DSX:[/b] check that "Rumble to Haptics" is off in DSX.
 [*][b]Still nothing:[/b] look at [i]RDR2DSXRumble.log[/i] in the game folder.
 [*][b]Weak rumble on DualSense:[/b] turn off "Rumble to Haptics" in DSX.
 [*][b]Double rumble or fighting triggers:[/b] disable other vibration or DualSense mods.
