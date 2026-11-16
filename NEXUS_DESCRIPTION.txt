@@ -1,6 +1,6 @@
 [b]First of all, if you find a bug and/or want something added please leave a comment and I will do that.[/b]
 
-[size=5][b]RDR2 Controller Rumble[/b][/size] - v1.8.1
+[size=5][b]RDR2 Controller Rumble[/b][/size] - v1.8.2
 [i]Rumble that follows what happens in the game, for DualSense and Xbox controllers. (Formerly "RDR2 DSX Rumble".)[/i]
 
 [b]30+ rumble effects[/b], each one tuned by hand, plus [b]12 adaptive trigger profiles[/b] for the weapons on the DualSense.
@@ -16,10 +16,11 @@
 
 [line]
 
-[size=4][b]What's new in v1.8.1[/b][/size]
+[size=4][b]What's new in v1.8.2[/b][/size]
 [list]
-[*][b]Bluetooth fix for the DualSense Native file:[/b] rumble, triggers and lightbar should now work over Bluetooth too. If it still doesn't rumble, please post your [i]RDR2DSXRumble.log[/i]
-[*]Main file: no changes, only the version number
+[*][b]Rumble stays on with DSX:[/b] if reading the controller fails, only the F11 menu buttons stop, and if DSX's virtual controller stops taking rumble, the mod switches to the Xbox route instead of trying it again and again
+[*][b]Bluetooth fix for the DualSense Native file[/b] (from v1.8.1)
+[*]If you still get no rumble over Bluetooth, please post your [i]RDR2DSXRumble.log[/i]
 [/list]
 
 [line]

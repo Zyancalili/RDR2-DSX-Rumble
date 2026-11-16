@@ -72,11 +72,11 @@ static fnNativePush64     shPush;
 static fnNativeCall       shCall;
 static HMODULE            g_module;
 // Versions: 1.6 -> 1.7 for a new version, 1.6 -> 1.6.1 -> 1.6.2 for bug fixes and small features
-#define MOD_VERSION "v1.8.1"
-#define MOD_VERSION_W L"1.8.1"
+#define MOD_VERSION "v1.8.2"
+#define MOD_VERSION_W L"1.8.2"
 #define MOD_VER_MAJOR 1
 #define MOD_VER_MINOR 8
-#define MOD_VER_PATCH 1
+#define MOD_VER_PATCH 2
 // DualSense Native edition (branch dualsense-native): always without DSX, own update channel (version_native.txt)
 #define DUALSENSE_NATIVE 1
 // Update check: the tag of the latest GitHub release (tags look like v1.6 / v1.6.1).
