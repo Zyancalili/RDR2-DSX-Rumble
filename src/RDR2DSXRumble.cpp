@@ -69,11 +69,11 @@ static fnNativePush64     shPush;
 static fnNativeCall       shCall;
 static HMODULE            g_module;
 // Versions: 1.6 -> 1.7 for a new version, 1.6 -> 1.6.1 -> 1.6.2 for bug fixes and small features
-#define MOD_VERSION "v1.8.1"
-#define MOD_VERSION_W L"1.8.1"
+#define MOD_VERSION "v1.8.2"
+#define MOD_VERSION_W L"1.8.2"
 #define MOD_VER_MAJOR 1
 #define MOD_VER_MINOR 8
-#define MOD_VER_PATCH 1
+#define MOD_VER_PATCH 2
 // Update check: the tag of the latest GitHub release (tags look like v1.6 / v1.6.1).
 #define UPDATE_HOST L"api.github.com"
 #define UPDATE_PATH L"/repos/Zyancalili/RDR2-DSX-Rumble/releases/latest"
@@ -458,6 +458,8 @@ namespace Pad {
     static bool       reading = false, writing = false;
     static uint8_t    inBuf[256], outBuf[256];
     static uint64_t   lastOpenTry = 0;
+    static bool       noRead = false;      // reading failed: menu buttons off, rumble keeps going
+    static bool       ds4Failed = false;   // a write to the DualShock 4 failed: try XInput before it again
 
     static void LoadXInput() {
         const char* names[] = {"xinput1_4.dll", "xinput1_3.dll", "xinput9_1_0.dll"};
@@ -500,7 +502,7 @@ namespace Pad {
                     if (HidP_GetCaps(pp, &caps) == HIDP_STATUS_SUCCESS && caps.OutputReportByteLength >= 11) {
                         inLen = std::min<USHORT>(caps.InputReportByteLength, sizeof inBuf);
                         outLen = std::min<USHORT>(caps.OutputReportByteLength, sizeof outBuf);
-                        h = d; ok = true;
+                        h = d; ok = true; noRead = false;
                         Log("pad: virtual DualShock 4 %04X:%04X (in %u, out %u bytes)", a.VendorID, a.ProductID, inLen, outLen);
                     }
                     HidD_FreePreparsedData(pp);
@@ -521,12 +523,13 @@ namespace Pad {
         uint64_t now = GetTickCount64();
         if (now - lastOpenTry < 2000) return;
         lastOpenTry = now;
-        if (OpenDS4()) return;
+        if (!ds4Failed && OpenDS4()) return;
         if (xget) {   // DSX in Xbox mode
             XState s;
             // an Xbox controller (or DSX in Xbox mode) - rumble works the same, there are just no adaptive triggers
             for (int i = 0; i < 4; i++) if (xget(i, &s) == 0) { if (xuser != i) Log("pad: Xbox controller (XInput user %d)", i); xuser = i; return; }
         }
+        ds4Failed = false;   // no XInput pad either: give the DualShock 4 another try next time
         static bool warned = false;
         if (!warned) { warned = true; Log("pad: no controller found yet - start DSX (DualSense) or plug in an Xbox controller"); }
         xuser = -1;
@@ -550,7 +553,10 @@ namespace Pad {
             ResetEvent(wov.hEvent);
             if (WriteFile(h, outBuf, outLen, nullptr, &wov)) return;
             if (GetLastError() == ERROR_IO_PENDING) { writing = true; return; }
-            if (!HidD_SetOutputReport(h, outBuf, outLen)) { Log("pad: write failed (%lu), reopening", GetLastError()); Close(); }
+            if (!HidD_SetOutputReport(h, outBuf, outLen)) {
+                Log("pad: write to the virtual DualShock 4 failed (%lu), trying XInput next", GetLastError());
+                Close(); ds4Failed = true;
+            }
         } else if (xuser >= 0 && xset) {
             XVib v{(WORD)(strong * 257), (WORD)(weak * 257)};
             if (xset(xuser, &v) != 0) xuser = -1;
@@ -578,16 +584,19 @@ namespace Pad {
     // Returns true when a new button state was read.
     static bool ReadButtons(uint32_t& out) {
         if (h != INVALID_HANDLE_VALUE) {
+            if (noRead) return false;
+            // a failed read only turns the menu buttons off: closing here used to stop the rumble every frame
+            auto fail = [] { Log("pad: reading the virtual DualShock 4 failed (%lu); rumble goes on, controller buttons in the F11 menu are off", GetLastError()); noRead = true; return false; };
             if (!reading) {
                 ResetEvent(rov.hEvent);
                 if (ReadFile(h, inBuf, inLen, nullptr, &rov)) { reading = true; }
                 else if (GetLastError() == ERROR_IO_PENDING) reading = true;
-                else { Log("pad: read failed (%lu), reopening", GetLastError()); Close(); return false; }
+                else return fail();
             }
             if (WaitForSingleObject(rov.hEvent, 0) != WAIT_OBJECT_0) return false;
             DWORD n = 0;
             reading = false;
-            if (!GetOverlappedResult(h, &rov, &n, FALSE)) { Close(); return false; }
+            if (!GetOverlappedResult(h, &rov, &n, FALSE)) return fail();
             if (n >= 8 && inBuf[0] == 0x01) { out = FromDS4(inBuf); return true; }
             return false;
         }
