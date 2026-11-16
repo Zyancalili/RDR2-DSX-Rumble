@@ -1,7 +1,5 @@
-# Renders the Nexus media for RDR2 Controller Rumble into .\media, stamped with MOD_VERSION from the source
+# Renders the Nexus media for RDR2 Controller Rumble into .\media (no version on them, so they only change when the features do)
 #   powershell -ExecutionPolicy Bypass -File tools_media.ps1
-$version = [regex]::Match((Get-Content (Join-Path $PSScriptRoot 'src\RDR2DSXRumble.cpp') -Raw), '#define MOD_VERSION "(v[\d.]+)"').Groups[1].Value
-if (-not $version) { throw 'MOD_VERSION not found in src\RDR2DSXRumble.cpp' }
 Add-Type -AssemblyName System.Drawing
 $out = Join-Path $PSScriptRoot 'media'
 New-Item -ItemType Directory -Force $out | Out-Null
@@ -89,7 +87,6 @@ Text $g 'CONTROLLER RUMBLE' (F 50 'Bold') $cream 60 100 1100 90 'Near' $true
 $g.DrawLine((New-Object System.Drawing.Pen (C 200 245 230 200), 2), 66, 190, 640, 190)
 Text $g 'Feel every step, hoofbeat and shot on your controller' (F 24 'Italic') $cream 64 200 1000 50
 Text $g 'For DualSense (with or without DSX) and Xbox controllers' (F 17 'Bold' 'Segoe UI') $dim 66 250 1000 40
-Text $g $version (F 18 'Bold' 'Segoe UI') $cream 0 330 1280 40 'Far'
 Save $bmp $g 'banner_1300x372.png'
 
 # ---------------------------------------------------------------------------- 2. cover 1920x1080
@@ -99,7 +96,6 @@ Text $g 'CONTROLLER RUMBLE' (F 92 'Bold') $cream 0 170 1920 160 'Center' $true
 $g.DrawLine((New-Object System.Drawing.Pen (C 200 245 230 200), 3), 560, 320, 1360, 320)
 Text $g 'Feel every step, hoofbeat and shot on your controller' (F 46 'Italic') $cream 0 330 1920 80 'Center'
 Text $g 'Best with a DualSense, with or without DSX  -  works with Xbox controllers too' (F 28 'Bold' 'Segoe UI') $dim 0 410 1920 50 'Center'
-Text $g $version (F 30 'Bold' 'Segoe UI') $cream 0 1010 1880 60 'Far'
 Save $bmp $g '1_cover.png'
 
 # ---------------------------------------------------------------------------- 3. rumble feature grid
@@ -117,7 +113,6 @@ function Grid($title, $sub, $items, $name, $cols = 3, $maxCh = 170) {
         Text $g $items[$i][0] (F 30 'Bold') $amber ($x + 24) ($y + 14) ($cw - 40) 46
         Text $g $items[$i][1] (F ([Math]::Min(26, 19 * $maxCh / 170)) 'Regular' 'Segoe UI') $cream ($x + 24) ($y + 60) ($cw - 44) ($ch - 66)
     }
-    Text $g $version (F 24 'Bold' 'Segoe UI') $cream 0 1020 1880 50 'Far'
     Save $bmp $g $name
 }
 
@@ -158,5 +153,4 @@ for ($i = 0; $i -lt $guns.Count; $i++) {
     }
 }
 Text $g 'Plus: bow draw  -  lasso tension  -  galloping hooves  -  loose in menus and outside the game' (F 22 'Italic') $cream 0 925 1920 40 'Center'
-Text $g $version (F 24 'Bold' 'Segoe UI') $cream 0 1030 1880 40 'Far'
 Save $bmp $g '3_triggers.png'
